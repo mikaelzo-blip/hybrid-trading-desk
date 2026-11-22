@@ -51,9 +51,9 @@
 **Tujuan:** Mengaktifkan otak analisis multi-agent via tombol **Analyze Now** memakai **OpenCode Zen & OpenCode Go** dengan fallback otomatis, validasi 7 lapis di Rust, SSE streaming, dan overlay sinyal di chart.
 
 ### Batch 2A — Rust Technical, Structure & Regime Engine
-- [ ] **P2-01** `(rust-core)` Implementasikan `src/models/features.rs` (`HigherTfContext`, `ExecTfFeatures`, `MarketRegime`, `EventRisk`) dan `src/engine/indicators.rs` (`EMA 20/50/200`, `ADX 14`, `RSI 14`, `MACD`, `ATR 14`, `BB`, `Volume Ratio`, `VWAP`) dengan pemetaan otomatis *Execution TF -> Higher TF*.
-- [ ] **P2-02** `(rust-core)` Implementasikan `src/engine/structure.rs` (Swing High/Low window 5 bar, `nearest_support`, `nearest_resistance`, pola candlestick deterministik).
-- [ ] **P2-03** `(rust-core)` Implementasikan `src/engine/regime.rs` (versi awal Crypto: tren `BTCUSDT` 4H/1D, *Funding Rate* & *Open Interest* 24h via Binance Futures public API, cache Redis) dan endpoint `GET /api/regime/:asset_class`.
+- [x] **P2-01** `(rust-core)` Implementasikan `src/models/features.rs` (`HigherTfContext`, `ExecTfFeatures`, `MarketRegime`, `EventRisk`) dan `src/engine/indicators.rs` (`EMA 20/50/200`, `ADX 14`, `RSI 14`, `MACD`, `ATR 14`, `BB`, `Volume Ratio`, `VWAP`) dengan pemetaan otomatis *Execution TF -> Higher TF*.
+- [x] **P2-02** `(rust-core)` Implementasikan `src/engine/structure.rs` (Swing High/Low window 5 bar, `nearest_support`, `nearest_resistance`, pola candlestick deterministik).
+- [x] **P2-03** `(rust-core)` Implementasikan `src/engine/regime.rs` (versi awal Crypto: tren `BTCUSDT` 4H/1D, *Funding Rate* & *Open Interest* 24h via Binance Futures public API, cache Redis) dan endpoint `GET /api/regime/:asset_class`.
 
 ### Batch 2B — Rust 7-Layer Deterministic Guardrail
 - [ ] **P2-04** `(rust-core)` Implementasikan `src/models/signal.rs` dan 7-lapis `src/engine/guardrail.rs` menggunakan `rust_decimal`:

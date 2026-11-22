@@ -1,5 +1,6 @@
 mod adapters;
 mod config;
+mod engine;
 mod models;
 mod routes;
 
@@ -52,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/candles", get(routes::candles::get_candles))
+        .route("/api/regime/{asset_class}", get(routes::regime::get_regime))
         .route(
             "/ws/candles/{asset_class}/{ticker}/{tf}",
             get(routes::ws::ws_candles),

@@ -1,4 +1,5 @@
 pub mod candles;
+pub mod regime;
 pub mod ws;
 
 use std::sync::Arc;
