@@ -115,9 +115,9 @@
 - [x] **P4-02** `(ai-worker)` Implementasikan `app/triage_scout.py` dan endpoint `POST /scout/triage` (1 panggilan batch `quick_think_llm` lewat `llm_router.py` + `json_repair.py`) -> **Top 3–5 kandidat**.
 
 ### Batch 4B — Sequential Funnel, Scheduler & UI
-- [ ] **P4-03** `(rust-core)` Implementasikan `src/routes/scout.rs` (`POST /api/scout/run`, `GET /api/scout/picks`): Tahap 1 -> Tahap 2 -> Tahap 3 Deep Dive **wajib diproses sekuensial (1 per 1)** dengan batas `SCOUT_MAX_DEEP_DIVE` (default `3` di `FREE_TIER_MODE=true`) -> 7-lapis `guardrail.rs` -> simpan ke `scout_picks`.
-- [ ] **P4-04** `(rust-core)` Implementasikan `src/scout/scheduler.rs` memakai `tokio-cron-scheduler` jadwal WIB (`Asia/Jakarta`).
-- [ ] **P4-05** `(frontend)` Bangun `AiRadarSidebar.tsx` (daftar `scout_picks` per pasar, klik kandidat buka live chart + overlay Entry/SL/TP, tombol **Run Scout Now**).
+- [x] **P4-03** `(rust-core)` Implementasikan `src/routes/scout.rs` (`POST /api/scout/run`, `GET /api/scout/picks`): Tahap 1 -> Tahap 2 -> Tahap 3 Deep Dive **wajib diproses sekuensial (1 per 1)** dengan batas `SCOUT_MAX_DEEP_DIVE` (default `3` di `FREE_TIER_MODE=true`) -> 7-lapis `guardrail.rs` -> simpan ke `scout_picks`.
+- [x] **P4-04** `(rust-core)` Implementasikan `src/scout/scheduler.rs` memakai `tokio-cron-scheduler` jadwal WIB (`Asia/Jakarta`).
+- [x] **P4-05** `(frontend)` Bangun `AiRadarSidebar.tsx` (daftar `scout_picks` per pasar, klik kandidat buka live chart + overlay Entry/SL/TP, tombol **Run Scout Now**).
 
 ### Definition of Done (Fase 4)
 - Seluruh *Verification Gate* lulus.

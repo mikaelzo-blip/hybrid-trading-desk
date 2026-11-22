@@ -206,3 +206,43 @@ export async function placePaperOrder(body: {
   }
   return data as { id: string; status: string };
 }
+
+export interface ScoutPick {
+  id: string;
+  run_id: string;
+  asset_class: AssetClass;
+  ticker: string;
+  strategy_tag: string;
+  action: "BUY" | "SELL" | "HOLD";
+  confidence: number;
+  entry_price?: string | null;
+  stop_loss?: string | null;
+  take_profit?: string | null;
+  guardrail_approved: boolean;
+  reject_reason?: string | null;
+  risk_reward_ratio?: string | null;
+  position_size?: string | null;
+  triage_rank?: number | null;
+  priority_score?: number | null;
+  reasoning_summary: string;
+  created_at: string;
+}
+
+export async function fetchScoutPicks(assetClass?: AssetClass): Promise<ScoutPick[]> {
+  const q = assetClass ? `?asset_class=${encodeURIComponent(assetClass)}&limit=50` : "?limit=50";
+  const res = await fetch(`${API_BASE}/api/scout/picks${q}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`fetchScoutPicks failed (${res.status})`);
+  const data = (await res.json()) as { picks?: ScoutPick[] };
+  return data.picks ?? [];
+}
+
+export async function runScout(assetClass: AssetClass): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/api/scout/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ asset_class: assetClass }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`runScout failed (${res.status})`);
+  return data;
+}

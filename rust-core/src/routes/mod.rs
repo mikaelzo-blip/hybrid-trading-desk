@@ -2,6 +2,7 @@ pub mod analyze;
 pub mod candles;
 pub mod paper;
 pub mod regime;
+pub mod scout;
 pub mod ws;
 
 use std::sync::Arc;

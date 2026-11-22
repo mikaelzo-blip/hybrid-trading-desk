@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use chrono::Utc;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -22,12 +22,6 @@ pub struct PaperOrderRequest {
     pub take_profit: Option<Decimal>,
     pub position_size: Decimal,
     pub guardrail_approved: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PaperOrderResponse {
-    pub id: Uuid,
-    pub status: String,
 }
 
 pub async fn place_paper_order(

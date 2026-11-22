@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import AgentDebateStream from "@/components/AgentDebateStream";
+import AiRadarSidebar from "@/components/AiRadarSidebar";
 import LiveCandleChart from "@/components/LiveCandleChart";
 import MarketSelector from "@/components/MarketSelector";
 import RegimeStatusBar from "@/components/RegimeStatusBar";
@@ -16,6 +17,7 @@ import {
   type AssetClass,
   type MarketRegime,
   type PaperPortfolio,
+  type ScoutPick,
   type Timeframe,
 } from "@/lib/api";
 
@@ -150,6 +152,23 @@ export default function Home() {
   const eventRisk = signal?.event_risk ?? null;
   const circuitBreakerActive = portfolio?.risk_state.circuit_breaker_active ?? false;
 
+  const onScoutSelect = useCallback((pick: ScoutPick) => {
+    setAssetClass(pick.asset_class);
+    setTicker(pick.ticker);
+    const mapped: AgentSignal = {
+      asset_class: pick.asset_class,
+      ticker: pick.ticker,
+      action: pick.action,
+      confidence: pick.confidence,
+      entry_price: pick.entry_price ?? "0",
+      stop_loss: pick.stop_loss ?? "0",
+      take_profit: pick.take_profit ?? "0",
+      reasoning_summary: pick.reasoning_summary,
+      guardrail_status: pick.guardrail_approved ? "approved" : "rejected",
+      guardrail_reject_reasons: pick.reject_reason ? [pick.reject_reason] : [],
+    };
+    setSignal(mapped);
+  }, []);
   return (
     <main className="min-h-screen p-4 md:p-6">
       <header className="mb-4">
@@ -198,6 +217,7 @@ export default function Home() {
               fallbackNotice={fallbackNotice}
               running={analyzing}
             />
+            <AiRadarSidebar assetClass={assetClass} onSelect={onScoutSelect} />
           </div>
         </div>
       </div>

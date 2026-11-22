@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::models::features::EventRisk;

@@ -85,12 +85,32 @@ async fn main() -> anyhow::Result<()> {
             get(routes::paper::get_paper_portfolio),
         )
         .route(
+            "/api/scout/run",
+            axum::routing::post(routes::scout::run_scout),
+        )
+        .route("/api/scout/picks", get(routes::scout::get_scout_picks))
+        .route(
             "/ws/candles/{asset_class}/{ticker}/{tf}",
             get(routes::ws::ws_candles),
         )
         .layer(cors)
         .with_state(state);
 
+    let scout_base = format!("http://127.0.0.1:{}", config.rust_core_bind.port());
+    let _scout_sched = crate::scout::scheduler::start_scout_scheduler(move || {
+        let base = scout_base.clone();
+        async move {
+            let client = reqwest::Client::new();
+            for ac in ["crypto", "us_stock", "forex", "idx_stock"] {
+                let _ = client
+                    .post(format!("{base}/api/scout/run"))
+                    .json(&serde_json::json!({"asset_class": ac}))
+                    .send()
+                    .await;
+            }
+        }
+    })
+    .await?;
     let listener = tokio::net::TcpListener::bind(config.rust_core_bind).await?;
     tracing::info!(bind = %config.rust_core_bind, "rust-core listening");
     axum::serve(listener, app).await?;
