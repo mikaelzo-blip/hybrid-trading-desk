@@ -19,15 +19,21 @@ interface Props {
   onExecutePaper?: () => void;
   executingPaper?: boolean;
   portfolio?: PaperPortfolio | null;
+  enableVision?: boolean;
+  onToggleVision?: (v: boolean) => void;
 }
 
-export default function TradeSignalPanel({ signal, guardrail, onAnalyze, analyzing, onExecutePaper, executingPaper, portfolio }: Props) {
+export default function TradeSignalPanel({ signal, guardrail, onAnalyze, analyzing, onExecutePaper, executingPaper, portfolio, enableVision, onToggleVision }: Props) {
   const canExecute = !!signal && !!guardrail?.approved && (signal.action === "BUY" || signal.action === "SELL");
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-200">Trade Signal</h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-slate-300">
+            <input type="checkbox" checked={!!enableVision} onChange={(e) => onToggleVision?.(e.target.checked)} />
+            Enable Chart Vision
+          </label>
           <button
             type="button"
             onClick={onAnalyze}

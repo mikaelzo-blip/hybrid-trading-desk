@@ -10,6 +10,7 @@ from app.json_repair import repair_or_hold
 from app.llm_router import LLMRouter
 from app.router import asset_profile_prompt, enabled_analysts, event_risk_policy, normalize_event_risk
 from app.schemas import Action, AgentSignalOutput, AnalyzeRequest, hold_fallback
+from app.vision import analyze_chart_vision
 
 SYSTEM_GUARDRAILS = """You are part of a quantitative multi-agent trading desk.
 STRICT DATA INTEGRITY, TOKEN BUDGET & RISK RULES:
@@ -65,6 +66,22 @@ async def run_analysis(req: AnalyzeRequest, llm: LLMRouter | None = None) -> Asy
     analyst_notes: list[dict[str, str]] = []
     seen_provider_fallback = False
 
+    vision_result: dict[str, Any] | None = None
+    if req.enable_vision:
+        candles_payload = []
+        for c in req.candles[-120:]:
+            candles_payload.append(c if isinstance(c, dict) else c.model_dump(mode="json"))
+        vision_result = await analyze_chart_vision(
+            candles=candles_payload,
+            ticker=req.ticker,
+            timeframe=req.timeframe.value,
+            context_json=context_json,
+            router=llm,
+            settings=settings,
+        )
+        yield _sse("vision", {"stage": "vision", **vision_result})
+        if vision_result.get("status") == "completed":
+            analyst_notes.append({"analyst": "vision", "note": json.dumps(vision_result.get("analysis", {}), ensure_ascii=False), "provider": str(vision_result.get("provider", ""))})
     for analyst in analysts:
         prompt = (
             f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n\n"

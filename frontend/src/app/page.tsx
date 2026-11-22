@@ -51,6 +51,7 @@ export default function Home() {
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<PaperPortfolio | null>(null);
   const [executingPaper, setExecutingPaper] = useState(false);
+  const [enableVision, setEnableVision] = useState(false);
 
   const loadPortfolio = useCallback(async () => {
     try {
@@ -94,6 +95,7 @@ export default function Home() {
         assetClass,
         ticker,
         timeframe,
+        enableVision,
         onEvent: (ev) => {
           setEvents((prev) => [...prev, ev]);
           if (ev.event === "provider_fallback") {
@@ -124,7 +126,7 @@ export default function Home() {
     } finally {
       setAnalyzing(false);
     }
-  }, [assetClass, ticker, timeframe, loadPortfolio]);
+  }, [assetClass, ticker, timeframe, loadPortfolio, enableVision]);
 
   const onExecutePaper = useCallback(async () => {
     if (!signal || !guardrail?.approved || (signal.action !== "BUY" && signal.action !== "SELL")) return;
@@ -210,6 +212,8 @@ export default function Home() {
               onExecutePaper={onExecutePaper}
               executingPaper={executingPaper}
               portfolio={portfolio}
+              enableVision={enableVision}
+              onToggleVision={setEnableVision}
             />
             <AgentDebateStream
               events={events}

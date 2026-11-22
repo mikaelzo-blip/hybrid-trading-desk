@@ -130,9 +130,9 @@
 
 **Tujuan:** Menambahkan analisis visual candlestick PNG yang aman dijalankan bahkan ketika model gratis aktif hanya mendukung teks.
 
-- [ ] **P5-01** `(ai-worker)` Implementasikan `app/vision.py` (`mplfinance`, 80–120 candle + EMA 20/50 + volume, PNG < 500 KB) lengkap dengan *capability check* terhadap `VISION_MODEL` yang terkonfigurasi di `.env`.
-- [ ] **P5-02** `(ai-worker)` Integrasikan node *Chart Vision Analyst* ke `app/trading_agents_runner.py` (emit `stage: "vision"` dengan `status: "completed"` atau `"skipped_unsupported"` bila tidak ada vision model aktif / kena limit).
-- [ ] **P5-03** `(frontend)` Tambahkan toggle **Enable Chart Vision** di kontrol analisis WebUI dan tampilkan hasil/statusnya di `AgentDebateStream.tsx`.
+- [x] **P5-01** `(ai-worker)` Implementasikan `app/vision.py` (`mplfinance`, 80–120 candle + EMA 20/50 + volume, PNG < 500 KB) lengkap dengan *capability check* terhadap `VISION_MODEL` yang terkonfigurasi di `.env`.
+- [x] **P5-02** `(ai-worker)` Integrasikan node *Chart Vision Analyst* ke `app/trading_agents_runner.py` (emit `stage: "vision"` dengan `status: "completed"` atau `"skipped_unsupported"` bila tidak ada vision model aktif / kena limit).
+- [x] **P5-03** `(frontend)` Tambahkan toggle **Enable Chart Vision** di kontrol analisis WebUI dan tampilkan hasil/statusnya di `AgentDebateStream.tsx`.
 
 ### Definition of Done (Fase 5)
 - Unit test `vision.py` memastikan PNG valid < 500 KB dan *graceful degradation* lulus saat `VISION_MODEL` kosong atau error `429`.
