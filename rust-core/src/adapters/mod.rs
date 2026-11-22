@@ -1,4 +1,7 @@
+pub mod alpaca;
 pub mod binance;
+pub mod forex;
+pub mod idx;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};

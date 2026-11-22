@@ -29,26 +29,19 @@ pub async fn get_candles(
     let start = parse_ms_opt(q.start).map_err(bad_request)?;
     let end = parse_ms_opt(q.end).map_err(bad_request)?;
 
-    if !matches!(asset_class, AssetClass::Crypto) {
-        return Err(bad_request(
-            "only crypto asset_class is supported in Batch 1B".to_owned(),
-        ));
-    }
-
-    let mut candles = fetch_candles_db(&state, &ticker, timeframe, start, end, limit)
+    let mut candles = fetch_candles_db(&state, asset_class, &ticker, timeframe, start, end, limit)
         .await
         .map_err(internal_error)?;
 
     if candles.len() < limit {
-        let fetched = state
-            .binance
-            .fetch_klines(&ticker, timeframe, start, end, limit)
-            .await
-            .map_err(internal_error)?;
+        let fetched =
+            fetch_from_adapter(&state, asset_class, &ticker, timeframe, start, end, limit)
+                .await
+                .map_err(internal_error)?;
         crate::adapters::binance::BinanceAdapter::persist_candles(&state.db, &fetched)
             .await
             .map_err(internal_error)?;
-        candles = fetch_candles_db(&state, &ticker, timeframe, start, end, limit)
+        candles = fetch_candles_db(&state, asset_class, &ticker, timeframe, start, end, limit)
             .await
             .map_err(internal_error)?;
         if candles.is_empty() {
@@ -67,6 +60,7 @@ pub async fn get_candles(
 
 pub async fn fetch_candles_db(
     state: &AppState,
+    asset_class: AssetClass,
     ticker: &str,
     timeframe: Timeframe,
     start: Option<DateTime<Utc>>,
@@ -89,7 +83,7 @@ pub async fn fetch_candles_db(
     sql.push_str(&format!(" ORDER BY open_time ASC LIMIT ${param_idx}"));
 
     let mut q = sqlx::query_as::<_, CandleRow>(&sql)
-        .bind(AssetClass::Crypto.as_str())
+        .bind(asset_class.as_str())
         .bind(ticker)
         .bind(timeframe.as_str());
     if let Some(s) = start {
@@ -147,6 +141,28 @@ fn parse_ms_opt(ms: Option<i64>) -> Result<Option<DateTime<Utc>>, String> {
             .single()
             .map(Some)
             .ok_or_else(|| format!("invalid timestamp millis: {ms}")),
+    }
+}
+
+async fn fetch_from_adapter(
+    state: &AppState,
+    asset_class: AssetClass,
+    ticker: &str,
+    timeframe: Timeframe,
+    start: Option<DateTime<Utc>>,
+    end: Option<DateTime<Utc>>,
+    limit: usize,
+) -> anyhow::Result<Vec<Candle>> {
+    match asset_class {
+        AssetClass::Crypto => {
+            state
+                .binance
+                .fetch_klines(ticker, timeframe, start, end, limit)
+                .await
+        }
+        AssetClass::UsStock => state.alpaca.fetch_candles(ticker, timeframe, limit).await,
+        AssetClass::Forex => state.forex.fetch_candles(ticker, timeframe, limit).await,
+        AssetClass::IdxStock => state.idx.fetch_candles(ticker, timeframe, limit).await,
     }
 }
 

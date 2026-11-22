@@ -56,8 +56,16 @@ async fn handle_socket(
     }
 
     // Send initial snapshot from DB (last 200)
-    match crate::routes::candles::fetch_candles_db(&state, &ticker, timeframe, None, None, 200)
-        .await
+    match crate::routes::candles::fetch_candles_db(
+        &state,
+        asset_class,
+        &ticker,
+        timeframe,
+        None,
+        None,
+        200,
+    )
+    .await
     {
         Ok(candles) => {
             let msg = json!({

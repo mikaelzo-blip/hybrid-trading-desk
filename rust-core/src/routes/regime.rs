@@ -17,7 +17,13 @@ pub async fn get_regime(
 
     let engine = RegimeEngine::with_default().map_err(internal_error)?;
     let regime = engine
-        .get_regime(asset_class, &state.binance, &state.redis)
+        .get_regime(
+            asset_class,
+            &state.binance,
+            &state.alpaca,
+            &state.idx,
+            &state.redis,
+        )
         .await
         .map_err(internal_error)?;
 

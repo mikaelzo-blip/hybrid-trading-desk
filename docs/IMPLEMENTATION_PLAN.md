@@ -91,8 +91,8 @@
 **Tujuan:** Memperluas cakupan ke 4 pasar, melengkapi `regime.rs` & `event_risk.rs`, serta mengaktifkan *Paper Trading* semi-otomatis lengkap dengan *Drawdown Circuit Breaker*.
 
 ### Batch 3A — Multi-Market Adapters & Regime
-- [ ] **P3-01** `(rust-core)` Implementasikan `src/adapters/alpaca.rs` (candle IEX + Paper Order API), `src/adapters/forex.rs` (Twelve Data, `volume_reliability = "low_tick_only"`), dan `src/adapters/idx.rs` (ticker `.JK` + `^JKSE` + `USDIDR`).
-- [ ] **P3-02** `(rust-core)` Lengkapi `src/engine/regime.rs` untuk seluruh 4 pasar (`SPY`/`QQQ`/`VIX`, `^JKSE`/`USDIDR`, `DXY`/`US10Y`/sesi aktif, `BTC`/`BTC.D`/Funding/OI).
+- [x] **P3-01** `(rust-core)` Implementasikan `src/adapters/alpaca.rs` (candle IEX + Paper Order API), `src/adapters/forex.rs` (Twelve Data, `volume_reliability = "low_tick_only"`), dan `src/adapters/idx.rs` (ticker `.JK` + `^JKSE` + `USDIDR`).
+- [x] **P3-02** `(rust-core)` Lengkapi `src/engine/regime.rs` untuk seluruh 4 pasar (`SPY`/`QQQ`/`VIX`, `^JKSE`/`USDIDR`, `DXY`/`US10Y`/sesi aktif, `BTC`/`BTC.D`/Funding/OI).
 
 ### Batch 3B — Event Risk & Paper Trading
 - [ ] **P3-03** `(rust-core)` Implementasikan `src/engine/event_risk.rs` (Earnings < 48 jam US, High-Impact Forex < 30 menit, FCA/UMA/Suspend IDX + hook Foreign Flow, Funding Rate ekstrem Crypto) + unit test.

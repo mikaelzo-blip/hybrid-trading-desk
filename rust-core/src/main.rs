@@ -11,7 +11,10 @@ use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
 
+use crate::adapters::alpaca::AlpacaAdapter;
 use crate::adapters::binance::BinanceAdapter;
+use crate::adapters::forex::ForexAdapter;
+use crate::adapters::idx::IdxAdapter;
 use crate::routes::AppState;
 
 #[tokio::main]
@@ -37,12 +40,26 @@ async fn main() -> anyhow::Result<()> {
         config.binance_ws_base_url.clone(),
         config.outbound_proxy_url.clone(),
     )?);
+    let alpaca = Arc::new(AlpacaAdapter::new(
+        config.alpaca_data_url.clone(),
+        config.alpaca_paper_url.clone(),
+        config.alpaca_api_key.clone(),
+        config.alpaca_api_secret.clone(),
+    )?);
+    let forex = Arc::new(ForexAdapter::new(
+        config.twelve_data_base_url.clone(),
+        config.twelve_data_api_key.clone(),
+    )?);
+    let idx = Arc::new(IdxAdapter::new(config.yahoo_finance_base_url.clone())?);
 
     let state = AppState {
         config: config.clone(),
         db,
         redis,
         binance,
+        alpaca,
+        forex,
+        idx,
     };
 
     let cors = CorsLayer::new()

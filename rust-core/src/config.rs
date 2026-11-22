@@ -11,6 +11,13 @@ pub struct AppConfig {
     pub binance_rest_base_url: String,
     pub binance_ws_base_url: String,
     pub outbound_proxy_url: Option<String>,
+    pub alpaca_data_url: String,
+    pub alpaca_paper_url: String,
+    pub alpaca_api_key: Option<String>,
+    pub alpaca_api_secret: Option<String>,
+    pub twelve_data_base_url: String,
+    pub twelve_data_api_key: Option<String>,
+    pub yahoo_finance_base_url: String,
 }
 
 impl AppConfig {
@@ -41,6 +48,16 @@ impl AppConfig {
             ),
             binance_ws_base_url: env_or("BINANCE_WS_BASE_URL", "wss://stream.binance.com:9443/ws"),
             outbound_proxy_url: optional("OUTBOUND_PROXY_URL"),
+            alpaca_data_url: env_or("ALPACA_DATA_URL", "https://data.alpaca.markets"),
+            alpaca_paper_url: env_or("ALPACA_BASE_URL", "https://paper-api.alpaca.markets"),
+            alpaca_api_key: optional("ALPACA_API_KEY"),
+            alpaca_api_secret: optional("ALPACA_API_SECRET"),
+            twelve_data_base_url: env_or("TWELVE_DATA_BASE_URL", "https://api.twelvedata.com"),
+            twelve_data_api_key: optional("TWELVE_DATA_API_KEY"),
+            yahoo_finance_base_url: env_or(
+                "YAHOO_FINANCE_BASE_URL",
+                "https://query1.finance.yahoo.com",
+            ),
         })
     }
 }

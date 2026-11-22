@@ -7,7 +7,7 @@ use axum::Json;
 use chrono::Utc;
 use futures_util::StreamExt;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -77,7 +77,13 @@ async fn run_analyze(
     // 2) Market regime + event risk
     let regime_engine = RegimeEngine::with_default()?;
     let regime = regime_engine
-        .get_regime(asset_class, &state.binance, &state.redis)
+        .get_regime(
+            asset_class,
+            &state.binance,
+            &state.alpaca,
+            &state.idx,
+            &state.redis,
+        )
         .await
         .unwrap_or_else(|_| crate::models::features::MarketRegime {
             asset_class,
@@ -208,12 +214,21 @@ async fn run_analyze(
 
 async fn load_candles(
     state: &AppState,
-    _asset_class: AssetClass,
+    asset_class: AssetClass,
     ticker: &str,
     timeframe: Timeframe,
     limit: usize,
 ) -> anyhow::Result<Vec<Candle>> {
-    crate::routes::candles::fetch_candles_db(state, ticker, timeframe, None, None, limit).await
+    crate::routes::candles::fetch_candles_db(
+        state,
+        asset_class,
+        ticker,
+        timeframe,
+        None,
+        None,
+        limit,
+    )
+    .await
 }
 
 async fn fetch_live_price(state: &AppState, ticker: &str) -> anyhow::Result<Decimal> {
