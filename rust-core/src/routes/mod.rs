@@ -1,3 +1,4 @@
+pub mod analyze;
 pub mod candles;
 pub mod regime;
 pub mod ws;
@@ -11,7 +12,6 @@ use crate::config::AppConfig;
 
 #[derive(Clone)]
 pub struct AppState {
-    #[allow(dead_code)]
     pub config: Arc<AppConfig>,
     pub db: PgPool,
     pub redis: redis::Client,

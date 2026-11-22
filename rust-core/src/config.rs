@@ -7,7 +7,6 @@ pub struct AppConfig {
     pub database_url: String,
     pub redis_url: String,
     pub rust_core_bind: SocketAddr,
-    #[allow(dead_code)]
     pub ai_worker_base_url: String,
     pub binance_rest_base_url: String,
     pub binance_ws_base_url: String,

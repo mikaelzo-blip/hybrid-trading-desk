@@ -77,7 +77,7 @@ pub fn evaluate(input: &GuardrailInput) -> ValidatedOrderPlan {
     // Lapis 7: Regime-Adjusted Position Sizing
     let mut position_size = input.base_position_size;
     if input.market_regime.volatility_regime == "extreme" {
-        position_size = position_size * dec!(0.5);
+        position_size *= dec!(0.5);
     }
     if matches!(input.signal.asset_class, AssetClass::IdxStock) {
         position_size = round_down_lot(position_size, Decimal::from(100u64));

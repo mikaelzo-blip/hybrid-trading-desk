@@ -1,20 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { dispose, init, type KLineData } from "klinecharts";
+import { dispose, init, LineType, type KLineData } from "klinecharts";
 
-import { fetchCandles, toChartCandle, type AssetClass, type Timeframe } from "@/lib/api";
+import {
+  fetchCandles,
+  toChartCandle,
+  type AgentSignal,
+  type AssetClass,
+  type Timeframe,
+} from "@/lib/api";
 import { connectCandleWs } from "@/lib/ws";
 
 interface Props {
   assetClass: AssetClass;
   ticker: string;
   timeframe: Timeframe;
+  signal?: AgentSignal | null;
 }
 
-export default function LiveCandleChart({ assetClass, ticker, timeframe }: Props) {
+export default function LiveCandleChart({ assetClass, ticker, timeframe, signal }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
+  const overlayIdsRef = useRef<string[]>([]);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
   const [wsStatus, setWsStatus] = useState<string>("connecting");
 
@@ -74,7 +82,6 @@ export default function LiveCandleChart({ assetClass, ticker, timeframe }: Props
     };
 
     void load();
-
     const onResize = () => chart?.resize();
     window.addEventListener("resize", onResize);
 
@@ -84,8 +91,59 @@ export default function LiveCandleChart({ assetClass, ticker, timeframe }: Props
       window.removeEventListener("resize", onResize);
       dispose(container);
       chartRef.current = null;
+      overlayIdsRef.current = [];
     };
   }, [assetClass, ticker, timeframe]);
+
+  // Draw signal overlays (Entry/SL/TP lines + BUY/SELL marker)
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    // clear previous overlays
+    overlayIdsRef.current.forEach((id) => chart.removeOverlay({ id }));
+    overlayIdsRef.current = [];
+
+    if (!signal) return;
+    const entry = Number(signal.entry_price);
+    const sl = Number(signal.stop_loss);
+    const tp = Number(signal.take_profit);
+    const isBuy = signal.action === "BUY";
+    const isSell = signal.action === "SELL";
+    if (!isBuy && !isSell) return;
+
+    const addPriceLine = (value: number, color: string, text: string) => {
+      if (!Number.isFinite(value) || value <= 0) return;
+      const id = chart.createOverlay({
+        name: "priceLine",
+        points: [{ value }],
+        lock: true,
+        styles: { line: { color, size: 1, style: LineType.Dashed, dashedValue: [4, 4] } },
+        extendData: text,
+      });
+      if (typeof id === "string") overlayIdsRef.current.push(id);
+      else if (Array.isArray(id)) overlayIdsRef.current.push(...id.filter((x): x is string => typeof x === "string"));
+    };
+
+    addPriceLine(entry, "#38bdf8", "Entry");
+    addPriceLine(sl, "#ef4444", "SL");
+    addPriceLine(tp, "#22c55e", "TP");
+
+    // BUY/SELL marker as a simple annotation overlay
+    if (Number.isFinite(entry) && entry > 0) {
+      const id = chart.createOverlay({
+        name: "simpleAnnotation",
+        extendData: signal.action,
+        points: [{ timestamp: Date.now(), value: entry }],
+        lock: true,
+        styles: {
+          symbol: { type: "diamond", size: 2, color: isBuy ? "#22c55e" : "#ef4444" },
+        } as unknown as Record<string, unknown>,
+      });
+      if (typeof id === "string") overlayIdsRef.current.push(id);
+      else if (Array.isArray(id)) overlayIdsRef.current.push(...id.filter((x): x is string => typeof x === "string"));
+    }
+  }, [signal, status]);
 
   return (
     <div className="flex h-full min-h-[520px] flex-col rounded-lg border border-slate-800 bg-slate-900/40">

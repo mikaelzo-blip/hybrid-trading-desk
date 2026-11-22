@@ -74,9 +74,9 @@
 - [x] **P2-07** `(ai-worker)` Implementasikan `app/json_repair.py` (hapus `<think>...</think>`, hapus markdown fence, ekstrak JSON terluar, validasi Pydantic v2, maks 1x repair call, fallback aman ke `HOLD`) + unit test (`tests/test_json_repair.py`).
 
 ### Batch 2D — TradingAgents Runner, SSE Proxy & Frontend Overlay
-- [ ] **P2-08** `(ai-worker)` Implementasikan `app/router.py`, `app/trading_agents_runner.py` (memakai prompt `docs/AGENT_PROMPTS.md` & `llm_router.py`), dan ekspos `POST /analyze/stream` (SSE: `router`, `analyst`, `debate`, `provider_fallback`, `final`) + unit test mock LLM di `tests/`.
-- [ ] **P2-09** `(rust-core)` Implementasikan `src/routes/analyze.rs` (`POST /api/analyze`): hitung fitur MTF + `market_regime` + `event_risk` -> proxy SSE dari `ai-worker` -> cek harga *live* Redis -> jalankan 7-lapis `guardrail.rs` -> simpan ke `agent_signals` (termasuk `llm_provider_used`) -> kirim hasil final ke frontend.
-- [ ] **P2-10** `(frontend)` Bangun `RegimeStatusBar.tsx`, `AgentDebateStream.tsx` (tampilkan juga badge provider aktif & notifikasi fallback bila terjadi), dan `TradeSignalPanel.tsx`, serta overlay marker `BUY`/`SELL` + garis Entry/SL/TP di `LiveCandleChart.tsx`.
+- [x] **P2-08** `(ai-worker)` Implementasikan `app/router.py`, `app/trading_agents_runner.py` (memakai prompt `docs/AGENT_PROMPTS.md` & `llm_router.py`), dan ekspos `POST /analyze/stream` (SSE: `router`, `analyst`, `debate`, `provider_fallback`, `final`) + unit test mock LLM di `tests/`.
+- [x] **P2-09** `(rust-core)` Implementasikan `src/routes/analyze.rs` (`POST /api/analyze`): hitung fitur MTF + `market_regime` + `event_risk` -> proxy SSE dari `ai-worker` -> cek harga *live* Redis -> jalankan 7-lapis `guardrail.rs` -> simpan ke `agent_signals` (termasuk `llm_provider_used`) -> kirim hasil final ke frontend.
+- [x] **P2-10** `(frontend)` Bangun `RegimeStatusBar.tsx`, `AgentDebateStream.tsx` (tampilkan juga badge provider aktif & notifikasi fallback bila terjadi), dan `TradeSignalPanel.tsx`, serta overlay marker `BUY`/`SELL` + garis Entry/SL/TP di `LiveCandleChart.tsx`.
 
 ### Definition of Done (Fase 2)
 - `cd rust-core && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` lulus.

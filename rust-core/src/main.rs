@@ -55,6 +55,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/candles", get(routes::candles::get_candles))
         .route("/api/regime/{asset_class}", get(routes::regime::get_regime))
         .route(
+            "/api/analyze",
+            axum::routing::post(routes::analyze::analyze),
+        )
+        .route(
             "/ws/candles/{asset_class}/{ticker}/{tf}",
             get(routes::ws::ws_candles),
         )
