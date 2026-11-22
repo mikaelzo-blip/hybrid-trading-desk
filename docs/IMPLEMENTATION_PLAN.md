@@ -111,8 +111,8 @@
 **Tujuan:** Membangun agen pemburu kandidat beli harian otomatis dengan antrean sekuensial yang aman untuk kuota gratis OpenCode Zen/Go.
 
 ### Batch 4A — Screener & AI Triage
-- [ ] **P4-01** `(rust-core)` Implementasikan `src/scout/screener.rs` (Tahap 1 — 0 token LLM): pemindaian paralel *universe* 4 pasar + pra-filter `event_risk` -> **Top 15 kandidat**.
-- [ ] **P4-02** `(ai-worker)` Implementasikan `app/triage_scout.py` dan endpoint `POST /scout/triage` (1 panggilan batch `quick_think_llm` lewat `llm_router.py` + `json_repair.py`) -> **Top 3–5 kandidat**.
+- [x] **P4-01** `(rust-core)` Implementasikan `src/scout/screener.rs` (Tahap 1 — 0 token LLM): pemindaian paralel *universe* 4 pasar + pra-filter `event_risk` -> **Top 15 kandidat**.
+- [x] **P4-02** `(ai-worker)` Implementasikan `app/triage_scout.py` dan endpoint `POST /scout/triage` (1 panggilan batch `quick_think_llm` lewat `llm_router.py` + `json_repair.py`) -> **Top 3–5 kandidat**.
 
 ### Batch 4B — Sequential Funnel, Scheduler & UI
 - [ ] **P4-03** `(rust-core)` Implementasikan `src/routes/scout.rs` (`POST /api/scout/run`, `GET /api/scout/picks`): Tahap 1 -> Tahap 2 -> Tahap 3 Deep Dive **wajib diproses sekuensial (1 per 1)** dengan batas `SCOUT_MAX_DEEP_DIVE` (default `3` di `FREE_TIER_MODE=true`) -> 7-lapis `guardrail.rs` -> simpan ke `scout_picks`.

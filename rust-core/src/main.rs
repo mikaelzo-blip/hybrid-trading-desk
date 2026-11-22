@@ -3,6 +3,7 @@ mod config;
 mod engine;
 mod models;
 mod routes;
+mod scout;
 
 use std::sync::Arc;
 
