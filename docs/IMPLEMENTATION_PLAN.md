@@ -66,12 +66,12 @@
   - Unit test menyeluruh untuk seluruh 7 lapis.
 
 ### Batch 2C — Python LLM Router (OpenCode Zen/Go + Fallback) & JSON Repair
-- [ ] **P2-05** `(ai-worker)` Inisialisasi proyek Python (`pyproject.toml`, `Dockerfile`, FastAPI, `langchain-openai`, `tenacity`, `TauricResearch/TradingAgents`), `app/config.py`, dan `app/schemas.py` (sinkron penuh dengan `docs/TRADING_DESK_SPEC.md`).
-- [ ] **P2-06** `(ai-worker)` Implementasikan `app/llm_router.py`:
+- [x] **P2-05** `(ai-worker)` Inisialisasi proyek Python (`pyproject.toml`, `Dockerfile`, FastAPI, `langchain-openai`, `tenacity`, `TauricResearch/TradingAgents`), `app/config.py`, dan `app/schemas.py` (sinkron penuh dengan `docs/TRADING_DESK_SPEC.md`).
+- [x] **P2-06** `(ai-worker)` Implementasikan `app/llm_router.py`:
   - Factory OpenAI-compatible untuk `opencode_zen`, `opencode_go`, `gemini_free`, `groq_free`, `openrouter_free`, dan `ollama` — semua model ID & base URL dibaca dari `.env`.
   - `asyncio.Semaphore(LLM_MAX_CONCURRENCY)` + jeda pacing `LLM_NODE_DELAY_MS`.
   - Fallback chain otomatis saat `HTTP 429` / `5xx` / timeout + unit test simulasi `429` fallback (`tests/test_llm_router.py`).
-- [ ] **P2-07** `(ai-worker)` Implementasikan `app/json_repair.py` (hapus `<think>...</think>`, hapus markdown fence, ekstrak JSON terluar, validasi Pydantic v2, maks 1x repair call, fallback aman ke `HOLD`) + unit test (`tests/test_json_repair.py`).
+- [x] **P2-07** `(ai-worker)` Implementasikan `app/json_repair.py` (hapus `<think>...</think>`, hapus markdown fence, ekstrak JSON terluar, validasi Pydantic v2, maks 1x repair call, fallback aman ke `HOLD`) + unit test (`tests/test_json_repair.py`).
 
 ### Batch 2D — TradingAgents Runner, SSE Proxy & Frontend Overlay
 - [ ] **P2-08** `(ai-worker)` Implementasikan `app/router.py`, `app/trading_agents_runner.py` (memakai prompt `docs/AGENT_PROMPTS.md` & `llm_router.py`), dan ekspos `POST /analyze/stream` (SSE: `router`, `analyst`, `debate`, `provider_fallback`, `final`) + unit test mock LLM di `tests/`.
