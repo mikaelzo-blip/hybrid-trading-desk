@@ -1,3 +1,5 @@
+pub mod binance;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::future::Future;
@@ -8,6 +10,7 @@ use crate::models::market::{AssetClass, Candle, Timeframe};
 ///
 /// Implementations normalize venue-specific payloads into the shared `Candle`
 /// model. Real-time streaming and persistence are wired by higher layers.
+#[allow(dead_code)]
 pub trait MarketAdapter: Send + Sync {
     /// Asset class served by this adapter.
     fn asset_class(&self) -> AssetClass;

@@ -28,11 +28,11 @@
 - [x] **P1-03** `(rust-core)` Implementasikan model standar di `src/models/market.rs` (`AssetClass`, `Timeframe`, `CorrelationGroup`, `Candle` dengan `Decimal`) dan trait `MarketAdapter` di `src/adapters/mod.rs`.
 
 ### Batch 1B — Binance Live Feed & API Gateway
-- [ ] **P1-04** `(rust-core)` Implementasikan `src/adapters/binance.rs`:
+- [x] **P1-04** `(rust-core)` Implementasikan `src/adapters/binance.rs`:
   - REST historis ke `BINANCE_REST_BASE_URL` (`/api/v3/klines`).
   - WebSocket stream kline dengan *exponential backoff auto-reconnect* dan dukungan opsional `OUTBOUND_PROXY_URL`.
   - Caching candle aktif & harga *live* terakhir ke Redis + penyimpanan historis ke PostgreSQL.
-- [ ] **P1-05** `(rust-core)` Implementasikan endpoint `GET /api/candles` (`src/routes/candles.rs`) dan `WS /ws/candles/:asset_class/:ticker/:tf` (`src/routes/ws.rs`) plus konfigurasi CORS di `src/main.rs`.
+- [x] **P1-05** `(rust-core)` Implementasikan endpoint `GET /api/candles` (`src/routes/candles.rs`) dan `WS /ws/candles/:asset_class/:ticker/:tf` (`src/routes/ws.rs`) plus konfigurasi CORS di `src/main.rs`.
 
 ### Batch 1C — Next.js Live Chart WebUI
 - [ ] **P1-06** `(frontend)` Inisialisasi Next.js App Router + Tailwind CSS + `klinecharts` + `zustand` + `lucide-react`.

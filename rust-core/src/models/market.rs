@@ -100,8 +100,10 @@ impl FromStr for Timeframe {
 /// Logical correlation bucket used by portfolio/risk guardrails.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+#[allow(dead_code)]
 pub struct CorrelationGroup(pub String);
 
+#[allow(dead_code)]
 impl CorrelationGroup {
     pub fn general() -> Self {
         Self("general".to_owned())
