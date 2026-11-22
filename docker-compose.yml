@@ -1,0 +1,92 @@
+name: hybrid-trading-desk
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trading_desk}
+      POSTGRES_USER: ${POSTGRES_USER:-trading}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trading} -d ${POSTGRES_DB:-trading_desk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rust-core:
+    build:
+      context: ./rust-core
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://trading:change_me@postgres:5432/trading_desk}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      RUST_CORE_PORT: ${RUST_CORE_PORT:-8080}
+      AI_WORKER_BASE_URL: ${AI_WORKER_BASE_URL:-http://ai-worker:8000}
+      RUST_LOG: ${RUST_LOG:-info,rust_core=debug}
+    ports:
+      - "${RUST_CORE_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ai-worker:
+    build:
+      context: ./ai-worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      AI_WORKER_PORT: ${AI_WORKER_PORT:-8000}
+      RUST_CORE_BASE_URL: ${RUST_CORE_BASE_URL:-http://rust-core:8080}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${AI_WORKER_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      FRONTEND_PORT: ${FRONTEND_PORT:-3000}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-ws://localhost:8080}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - rust-core
+
+volumes:
+  postgres_data:
+  redis_data:
