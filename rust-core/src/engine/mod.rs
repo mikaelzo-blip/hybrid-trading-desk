@@ -1,3 +1,4 @@
+pub mod event_risk;
 pub mod guardrail;
 pub mod indicators;
 pub mod regime;

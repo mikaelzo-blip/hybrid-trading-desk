@@ -241,15 +241,10 @@ async fn fetch_live_price(state: &AppState, ticker: &str) -> anyhow::Result<Deci
     Ok(v.parse()?)
 }
 
-fn compute_event_risk(asset_class: AssetClass, _ticker: &str) -> EventRisk {
-    // Batch 2 baseline: placeholder, Batch 3 fills full event risk engine.
-    EventRisk {
-        asset_class,
-        blocked_entry: false,
-        severity: "none".into(),
-        reasons: Vec::new(),
-        details: json!({ "status": "baseline" }),
-    }
+fn compute_event_risk(asset_class: AssetClass, ticker: &str) -> EventRisk {
+    // Baseline: use deterministic engine; external calendar feeds can enrich EventRiskInput later.
+    let input = crate::engine::event_risk::EventRiskInput::default();
+    crate::engine::event_risk::evaluate(asset_class, ticker, &input)
 }
 
 fn parse_sse_block(block: &str) -> Option<(String, Value)> {

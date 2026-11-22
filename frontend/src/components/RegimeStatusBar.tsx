@@ -5,15 +5,18 @@ import type { MarketRegime } from "@/lib/api";
 interface Props {
   regime: MarketRegime | null;
   loading?: boolean;
+  eventRisk?: { blocked_entry: boolean; severity: string; reasons?: string[] } | null;
+  circuitBreakerActive?: boolean;
 }
 
 function badgeClass(kind: string) {
   if (kind.includes("bull") || kind.includes("risk_on") || kind === "low") return "bg-emerald-600/20 text-emerald-300";
-  if (kind.includes("bear") || kind.includes("risk_off") || kind === "high" || kind === "extreme") return "bg-rose-600/20 text-rose-300";
+  if (kind.includes("bear") || kind.includes("risk_off") || kind === "high" || kind === "extreme" || kind === "blocked") return "bg-rose-600/20 text-rose-300";
+  if (kind === "caution") return "bg-amber-600/20 text-amber-300";
   return "bg-slate-700/40 text-slate-300";
 }
 
-export default function RegimeStatusBar({ regime, loading }: Props) {
+export default function RegimeStatusBar({ regime, loading, eventRisk, circuitBreakerActive }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs">
       <span className="text-slate-400">Regime</span>
@@ -24,9 +27,18 @@ export default function RegimeStatusBar({ regime, loading }: Props) {
           <span className={`rounded px-2 py-0.5 ${badgeClass(regime.regime_label)}`}>{regime.regime_label}</span>
           <span className={`rounded px-2 py-0.5 ${badgeClass(regime.bias)}`}>bias: {regime.bias}</span>
           <span className={`rounded px-2 py-0.5 ${badgeClass(regime.volatility_regime)}`}>vol: {regime.volatility_regime}</span>
-          <span className="text-slate-400 truncate max-w-[48rem]" title={regime.summary}>{regime.summary}</span>
         </>
       )}
+      <span className="text-slate-500">|</span>
+      <span className="text-slate-400">Event Risk</span>
+      <span className={`rounded px-2 py-0.5 ${eventRisk?.blocked_entry ? "bg-rose-600/20 text-rose-300" : badgeClass(eventRisk?.severity ?? "none")}`}>
+        {eventRisk ? (eventRisk.blocked_entry ? "BLOCKED" : eventRisk.severity) : "none"}
+      </span>
+      <span className="text-slate-400">Circuit Breaker</span>
+      <span className={`rounded px-2 py-0.5 ${circuitBreakerActive ? "bg-rose-600/20 text-rose-300" : "bg-emerald-600/20 text-emerald-300"}`}>
+        {circuitBreakerActive ? "ACTIVE" : "OFF"}
+      </span>
+      {regime?.summary && <span className="text-slate-400 truncate max-w-[40rem]" title={regime.summary}>{regime.summary}</span>}
     </div>
   );
 }

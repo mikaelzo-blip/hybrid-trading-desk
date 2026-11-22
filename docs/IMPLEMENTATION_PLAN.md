@@ -95,9 +95,9 @@
 - [x] **P3-02** `(rust-core)` Lengkapi `src/engine/regime.rs` untuk seluruh 4 pasar (`SPY`/`QQQ`/`VIX`, `^JKSE`/`USDIDR`, `DXY`/`US10Y`/sesi aktif, `BTC`/`BTC.D`/Funding/OI).
 
 ### Batch 3B — Event Risk & Paper Trading
-- [ ] **P3-03** `(rust-core)` Implementasikan `src/engine/event_risk.rs` (Earnings < 48 jam US, High-Impact Forex < 30 menit, FCA/UMA/Suspend IDX + hook Foreign Flow, Funding Rate ekstrem Crypto) + unit test.
-- [ ] **P3-04** `(rust-core)` Implementasikan `src/routes/paper.rs` (`POST /api/paper/orders` wajib `guardrail_approved = true` & update `portfolio_risk_state`, serta `GET /api/paper/portfolio`).
-- [ ] **P3-05** `(frontend)` Perbarui `MarketSelector.tsx` (4 pasar), tampilkan *Event Risk* & status *Circuit Breaker* di `RegimeStatusBar.tsx`, dan tambahkan tombol **Execute Paper Trade** + ringkasan portofolio di `TradeSignalPanel.tsx`.
+- [x] **P3-03** `(rust-core)` Implementasikan `src/engine/event_risk.rs` (Earnings < 48 jam US, High-Impact Forex < 30 menit, FCA/UMA/Suspend IDX + hook Foreign Flow, Funding Rate ekstrem Crypto) + unit test.
+- [x] **P3-04** `(rust-core)` Implementasikan `src/routes/paper.rs` (`POST /api/paper/orders` wajib `guardrail_approved = true` & update `portfolio_risk_state`, serta `GET /api/paper/portfolio`).
+- [x] **P3-05** `(frontend)` Perbarui `MarketSelector.tsx` (4 pasar), tampilkan *Event Risk* & status *Circuit Breaker* di `RegimeStatusBar.tsx`, dan tambahkan tombol **Execute Paper Trade** + ringkasan portofolio di `TradeSignalPanel.tsx`.
 
 ### Definition of Done (Fase 3)
 - Seluruh *Verification Gate* (`rust-core`, `ai-worker`, `frontend`) lulus.

@@ -76,6 +76,14 @@ async fn main() -> anyhow::Result<()> {
             axum::routing::post(routes::analyze::analyze),
         )
         .route(
+            "/api/paper/orders",
+            axum::routing::post(routes::paper::place_paper_order),
+        )
+        .route(
+            "/api/paper/portfolio",
+            get(routes::paper::get_paper_portfolio),
+        )
+        .route(
             "/ws/candles/{asset_class}/{ticker}/{tf}",
             get(routes::ws::ws_candles),
         )

@@ -57,15 +57,28 @@ export function toChartCandle(c: Candle) {
   };
 }
 
+export interface AgentSignal {
+  asset_class: AssetClass;
+  ticker: string;
+  action: "BUY" | "SELL" | "HOLD";
+  confidence: number;
+  entry_price: string;
+  stop_loss: string;
+  take_profit: string;
+  reasoning_summary: string;
+  event_risk?: { blocked_entry: boolean; severity: string; reasons: string[] };
+  guardrail_status?: string;
+  guardrail_reject_reasons?: string[];
+}
+
 export interface MarketRegime {
   asset_class: AssetClass;
   regime_label: string;
   volatility_regime: string;
   bias: string;
   summary: string;
-  details?: Record<string, unknown>;
+  details: Record<string, unknown>;
 }
-
 export interface EventRisk {
   asset_class: AssetClass;
   blocked_entry: boolean;
@@ -74,14 +87,6 @@ export interface EventRisk {
   details?: Record<string, unknown>;
 }
 
-export interface AgentSignal {
-  action: "BUY" | "HOLD" | "SELL";
-  confidence: number;
-  entry_price: string;
-  stop_loss: string;
-  take_profit: string;
-  reasoning_summary: string;
-}
 
 export interface AnalyzeEvent {
   event: string;
@@ -146,4 +151,58 @@ export async function streamAnalyze(params: {
       }
     }
   }
+}
+
+export interface PortfolioRiskState {
+  daily_pnl_pct: string;
+  weekly_pnl_pct: string;
+  circuit_breaker_active: boolean;
+}
+
+export interface PaperOrder {
+  id: string;
+  asset_class: string;
+  ticker: string;
+  side: string;
+  status: string;
+  entry_price: string;
+  stop_loss?: string | null;
+  take_profit?: string | null;
+  position_size: string;
+  realized_pnl?: string | null;
+}
+
+export interface PaperPortfolio {
+  orders: PaperOrder[];
+  risk_state: PortfolioRiskState;
+}
+
+export async function fetchPaperPortfolio(): Promise<PaperPortfolio> {
+  const res = await fetch(`${API_BASE}/api/paper/portfolio`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`fetchPaperPortfolio failed (${res.status})`);
+  return (await res.json()) as PaperPortfolio;
+}
+
+export async function placePaperOrder(body: {
+  signal_id?: string;
+  asset_class: AssetClass;
+  ticker: string;
+  side: "BUY" | "SELL";
+  entry_price: string;
+  stop_loss?: string;
+  take_profit?: string;
+  position_size: string;
+  guardrail_approved: boolean;
+}): Promise<{ id: string; status: string }> {
+  const res = await fetch(`${API_BASE}/api/paper/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : `placePaperOrder failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data as { id: string; status: string };
 }

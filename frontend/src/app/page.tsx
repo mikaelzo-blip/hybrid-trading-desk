@@ -8,11 +8,14 @@ import MarketSelector from "@/components/MarketSelector";
 import RegimeStatusBar from "@/components/RegimeStatusBar";
 import TradeSignalPanel from "@/components/TradeSignalPanel";
 import {
+  fetchPaperPortfolio,
   fetchRegime,
+  placePaperOrder,
   streamAnalyze,
   type AgentSignal,
   type AssetClass,
   type MarketRegime,
+  type PaperPortfolio,
   type Timeframe,
 } from "@/lib/api";
 
@@ -27,6 +30,7 @@ interface GuardrailResult {
   risk_reward_ratio?: string | null;
   position_size?: string | null;
   live_price?: string | null;
+  signal_id?: string | null;
 }
 
 export default function Home() {
@@ -43,6 +47,16 @@ export default function Home() {
   const [analyzing, setAnalyzing] = useState(false);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [portfolio, setPortfolio] = useState<PaperPortfolio | null>(null);
+  const [executingPaper, setExecutingPaper] = useState(false);
+
+  const loadPortfolio = useCallback(async () => {
+    try {
+      setPortfolio(await fetchPaperPortfolio());
+    } catch {
+      // ignore; portfolio endpoint may be unavailable during dev
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +75,10 @@ export default function Home() {
       cancelled = true;
     };
   }, [assetClass]);
+
+  useEffect(() => {
+    void loadPortfolio();
+  }, [loadPortfolio]);
 
   const onAnalyze = useCallback(async () => {
     setAnalyzing(true);
@@ -92,6 +110,7 @@ export default function Home() {
           }
           if (ev.event === "guardrail") {
             setGuardrail(ev.data as unknown as GuardrailResult);
+            void loadPortfolio();
           }
         },
       });
@@ -103,7 +122,33 @@ export default function Home() {
     } finally {
       setAnalyzing(false);
     }
-  }, [assetClass, ticker, timeframe]);
+  }, [assetClass, ticker, timeframe, loadPortfolio]);
+
+  const onExecutePaper = useCallback(async () => {
+    if (!signal || !guardrail?.approved || (signal.action !== "BUY" && signal.action !== "SELL")) return;
+    setExecutingPaper(true);
+    try {
+      await placePaperOrder({
+        signal_id: guardrail.signal_id ?? undefined,
+        asset_class: assetClass,
+        ticker,
+        side: signal.action,
+        entry_price: signal.entry_price,
+        stop_loss: signal.stop_loss,
+        take_profit: signal.take_profit,
+        position_size: guardrail.position_size ?? "0",
+        guardrail_approved: true,
+      });
+      await loadPortfolio();
+    } catch (err) {
+      setEvents((prev) => [...prev, { event: "error", data: { message: err instanceof Error ? err.message : String(err) } }]);
+    } finally {
+      setExecutingPaper(false);
+    }
+  }, [assetClass, guardrail, loadPortfolio, signal, ticker]);
+
+  const eventRisk = signal?.event_risk ?? null;
+  const circuitBreakerActive = portfolio?.risk_state.circuit_breaker_active ?? false;
 
   return (
     <main className="min-h-screen p-4 md:p-6">
@@ -128,12 +173,25 @@ export default function Home() {
           onTimeframeChange={setTimeframe}
         />
 
-        <RegimeStatusBar regime={regime} loading={regimeLoading} />
+        <RegimeStatusBar
+          regime={regime}
+          loading={regimeLoading}
+          eventRisk={eventRisk}
+          circuitBreakerActive={circuitBreakerActive}
+        />
 
         <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
           <LiveCandleChart assetClass={assetClass} ticker={ticker} timeframe={timeframe} signal={signal} />
           <div className="space-y-4">
-            <TradeSignalPanel signal={signal} guardrail={guardrail} onAnalyze={onAnalyze} analyzing={analyzing} />
+            <TradeSignalPanel
+              signal={signal}
+              guardrail={guardrail}
+              onAnalyze={onAnalyze}
+              analyzing={analyzing}
+              onExecutePaper={onExecutePaper}
+              executingPaper={executingPaper}
+              portfolio={portfolio}
+            />
             <AgentDebateStream
               events={events}
               activeProvider={activeProvider}

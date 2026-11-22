@@ -1,5 +1,6 @@
 pub mod analyze;
 pub mod candles;
+pub mod paper;
 pub mod regime;
 pub mod ws;
 
