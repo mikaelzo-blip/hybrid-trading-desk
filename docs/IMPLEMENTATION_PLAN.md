@@ -56,7 +56,7 @@
 - [x] **P2-03** `(rust-core)` Implementasikan `src/engine/regime.rs` (versi awal Crypto: tren `BTCUSDT` 4H/1D, *Funding Rate* & *Open Interest* 24h via Binance Futures public API, cache Redis) dan endpoint `GET /api/regime/:asset_class`.
 
 ### Batch 2B — Rust 7-Layer Deterministic Guardrail
-- [ ] **P2-04** `(rust-core)` Implementasikan `src/models/signal.rs` dan 7-lapis `src/engine/guardrail.rs` menggunakan `rust_decimal`:
+- [x] **P2-04** `(rust-core)` Implementasikan `src/models/signal.rs` dan 7-lapis `src/engine/guardrail.rs` menggunakan `rust_decimal`:
   - Lapis 1: *Drawdown Circuit Breaker* (`daily_pnl_pct`, `weekly_pnl_pct`).
   - Lapis 2: *Event Risk Hard-Block*.
   - Lapis 3: *Entry Staleness / Slippage Guard* (`|live_price - entry_price| <= 0.5 * ATR`).
