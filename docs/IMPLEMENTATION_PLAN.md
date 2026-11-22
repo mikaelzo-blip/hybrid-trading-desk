@@ -35,8 +35,8 @@
 - [x] **P1-05** `(rust-core)` Implementasikan endpoint `GET /api/candles` (`src/routes/candles.rs`) dan `WS /ws/candles/:asset_class/:ticker/:tf` (`src/routes/ws.rs`) plus konfigurasi CORS di `src/main.rs`.
 
 ### Batch 1C — Next.js Live Chart WebUI
-- [ ] **P1-06** `(frontend)` Inisialisasi Next.js App Router + Tailwind CSS + `klinecharts` + `zustand` + `lucide-react`.
-- [ ] **P1-07** `(frontend)` Bangun `src/lib/api.ts`, `src/lib/ws.ts` (auto-reconnect), `MarketSelector.tsx`, dan `LiveCandleChart.tsx` yang memuat 200 candle historis lalu update real-time via WebSocket.
+- [x] **P1-06** `(frontend)` Inisialisasi Next.js App Router + Tailwind CSS + `klinecharts` + `zustand` + `lucide-react`.
+- [x] **P1-07** `(frontend)` Bangun `src/lib/api.ts`, `src/lib/ws.ts` (auto-reconnect), `MarketSelector.tsx`, dan `LiveCandleChart.tsx` yang memuat 200 candle historis lalu update real-time via WebSocket.
 
 ### Definition of Done (Fase 1)
 - `cd rust-core && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` lulus.
