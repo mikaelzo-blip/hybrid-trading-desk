@@ -53,83 +53,84 @@ async def run_analysis(req: AnalyzeRequest, llm: LLMRouter | None = None) -> Asy
         yield _sse("final", {"signal": out.model_dump(), "provider": "guardrail", "blocked": True})
         return
 
-    context_json = json.dumps({
-        "ticker": req.ticker,
-        "asset_class": req.asset_class.value,
-        "timeframe": req.timeframe.value,
-        "higher_tf_context": req.higher_tf_context if isinstance(req.higher_tf_context, dict) else (req.higher_tf_context.model_dump() if req.higher_tf_context else None),
-        "exec_tf_features": req.exec_tf_features if isinstance(req.exec_tf_features, dict) else req.exec_tf_features.model_dump(),
-        "market_regime": req.market_regime if isinstance(req.market_regime, dict) else req.market_regime.model_dump(),
-        "event_risk": req.event_risk if isinstance(req.event_risk, dict) else req.event_risk.model_dump(),
-    }, ensure_ascii=False)
+    try:
+        context_json = json.dumps({
+            "ticker": req.ticker,
+            "asset_class": req.asset_class.value,
+            "timeframe": req.timeframe.value,
+            "higher_tf_context": req.higher_tf_context if isinstance(req.higher_tf_context, dict) else (req.higher_tf_context.model_dump() if req.higher_tf_context else None),
+            "exec_tf_features": req.exec_tf_features if isinstance(req.exec_tf_features, dict) else req.exec_tf_features.model_dump(),
+            "market_regime": req.market_regime if isinstance(req.market_regime, dict) else req.market_regime.model_dump(),
+            "event_risk": req.event_risk if isinstance(req.event_risk, dict) else req.event_risk.model_dump(),
+        }, ensure_ascii=False)
 
-    analyst_notes: list[dict[str, str]] = []
-    seen_provider_fallback = False
+        analyst_notes: list[dict[str, str]] = []
+        seen_provider_fallback = False
 
-    vision_result: dict[str, Any] | None = None
-    if req.enable_vision:
-        candles_payload = []
-        for c in req.candles[-120:]:
-            candles_payload.append(c if isinstance(c, dict) else c.model_dump(mode="json"))
-        vision_result = await analyze_chart_vision(
-            candles=candles_payload,
-            ticker=req.ticker,
-            timeframe=req.timeframe.value,
-            context_json=context_json,
-            router=llm,
-            settings=settings,
+        vision_result: dict[str, Any] | None = None
+        if req.enable_vision:
+            candles_payload = []
+            for c in req.candles[-120:]:
+                candles_payload.append(c if isinstance(c, dict) else c.model_dump(mode="json"))
+            vision_result = await analyze_chart_vision(
+                candles=candles_payload,
+                ticker=req.ticker,
+                timeframe=req.timeframe.value,
+                context_json=context_json,
+                router=llm,
+                settings=settings,
+            )
+            yield _sse("vision", {"stage": "vision", **vision_result})
+            if vision_result.get("status") == "completed":
+                analyst_notes.append({"analyst": "vision", "note": json.dumps(vision_result.get("analysis", {}), ensure_ascii=False), "provider": str(vision_result.get("provider", ""))})
+        for analyst in analysts:
+            prompt = (
+                f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n\n"
+                f"ROLE: {analyst.upper()} analyst.\n"
+                f"CONTEXT JSON:\n{context_json}\n\n"
+                "Return concise bullet points in Bahasa Indonesia, max 120 words. No JSON, no markdown fence."
+            )
+            resp = await llm.complete(
+                [
+                    {"role": "system", "content": SYSTEM_GUARDRAILS},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=500,
+            )
+            if resp.provider != primary and not seen_provider_fallback:
+                seen_provider_fallback = True
+                yield _sse("provider_fallback", {"from": primary, "to": resp.provider, "stage": "analyst"})
+            note = resp.text.strip()
+            analyst_notes.append({"analyst": analyst, "note": note, "provider": resp.provider})
+            yield _sse("analyst", {"analyst": analyst, "note": note, "provider": resp.provider})
+
+        # Debate (1 round by default)
+        bull_prompt = (
+            f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n"
+            f"CONTEXT JSON:\n{context_json}\n\nANALYST NOTES:\n{json.dumps(analyst_notes, ensure_ascii=False)}\n\n"
+            "ROLE: Bull debater. Argue the strongest bullish case in max 120 words (Bahasa Indonesia). If not justified, admit it clearly."
         )
-        yield _sse("vision", {"stage": "vision", **vision_result})
-        if vision_result.get("status") == "completed":
-            analyst_notes.append({"analyst": "vision", "note": json.dumps(vision_result.get("analysis", {}), ensure_ascii=False), "provider": str(vision_result.get("provider", ""))})
-    for analyst in analysts:
-        prompt = (
-            f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n\n"
-            f"ROLE: {analyst.upper()} analyst.\n"
-            f"CONTEXT JSON:\n{context_json}\n\n"
-            "Return concise bullet points in Bahasa Indonesia, max 120 words. No JSON, no markdown fence."
-        )
-        resp = await llm.complete(
-            [
-                {"role": "system", "content": SYSTEM_GUARDRAILS},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=500,
-        )
-        if resp.provider != primary and not seen_provider_fallback:
+        bull = await llm.complete([{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": bull_prompt}], temperature=0.2, max_tokens=300)
+        if bull.provider != primary and not seen_provider_fallback:
             seen_provider_fallback = True
-            yield _sse("provider_fallback", {"from": primary, "to": resp.provider, "stage": "analyst"})
-        note = resp.text.strip()
-        analyst_notes.append({"analyst": analyst, "note": note, "provider": resp.provider})
-        yield _sse("analyst", {"analyst": analyst, "note": note, "provider": resp.provider})
+            yield _sse("provider_fallback", {"from": primary, "to": bull.provider, "stage": "debate"})
+        yield _sse("debate", {"side": "bull", "argument": bull.text.strip(), "provider": bull.provider})
 
-    # Debate (1 round by default)
-    bull_prompt = (
-        f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n"
-        f"CONTEXT JSON:\n{context_json}\n\nANALYST NOTES:\n{json.dumps(analyst_notes, ensure_ascii=False)}\n\n"
-        "ROLE: Bull debater. Argue the strongest bullish case in max 120 words (Bahasa Indonesia). If not justified, admit it clearly."
-    )
-    bull = await llm.complete([{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": bull_prompt}], temperature=0.2, max_tokens=300)
-    if bull.provider != primary and not seen_provider_fallback:
-        seen_provider_fallback = True
-        yield _sse("provider_fallback", {"from": primary, "to": bull.provider, "stage": "debate"})
-    yield _sse("debate", {"side": "bull", "argument": bull.text.strip(), "provider": bull.provider})
+        bear_prompt = (
+            f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n"
+            f"CONTEXT JSON:\n{context_json}\n\nANALYST NOTES:\n{json.dumps(analyst_notes, ensure_ascii=False)}\n\nBULL ARGUMENT:\n{bull.text}\n\n"
+            "ROLE: Bear debater. Argue the strongest bearish/risk case in max 120 words (Bahasa Indonesia). If not justified, admit it clearly."
+        )
+        bear = await llm.complete([{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": bear_prompt}], temperature=0.2, max_tokens=300)
+        if bear.provider != primary and not seen_provider_fallback:
+            seen_provider_fallback = True
+            yield _sse("provider_fallback", {"from": primary, "to": bear.provider, "stage": "debate"})
+        yield _sse("debate", {"side": "bear", "argument": bear.text.strip(), "provider": bear.provider})
 
-    bear_prompt = (
-        f"{SYSTEM_GUARDRAILS}\n\n{asset_profile_prompt(req.asset_class)}\n"
-        f"CONTEXT JSON:\n{context_json}\n\nANALYST NOTES:\n{json.dumps(analyst_notes, ensure_ascii=False)}\n\nBULL ARGUMENT:\n{bull.text}\n\n"
-        "ROLE: Bear debater. Argue the strongest bearish/risk case in max 120 words (Bahasa Indonesia). If not justified, admit it clearly."
-    )
-    bear = await llm.complete([{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": bear_prompt}], temperature=0.2, max_tokens=300)
-    if bear.provider != primary and not seen_provider_fallback:
-        seen_provider_fallback = True
-        yield _sse("provider_fallback", {"from": primary, "to": bear.provider, "stage": "debate"})
-    yield _sse("debate", {"side": "bear", "argument": bear.text.strip(), "provider": bear.provider})
-
-    # Final Risk Manager decision (strict JSON)
-    debate_summary = f"BULL:\n{bull.text}\n\nBEAR:\n{bear.text}\n\nANALYSTS:\n{json.dumps(analyst_notes, ensure_ascii=False)}"
-    final_prompt = f"""Synthesize the analyst reports, intermarket regime, event risk warnings, and the Bull vs Bear debate into a single final trading decision.
+        # Final Risk Manager decision (strict JSON)
+        debate_summary = f"BULL:\n{bull.text}\n\nBEAR:\n{bear.text}\n\nANALYSTS:\n{json.dumps(analyst_notes, ensure_ascii=False)}"
+        final_prompt = f"""Synthesize the analyst reports, intermarket regime, event risk warnings, and the Bull vs Bear debate into a single final trading decision.
 
 ASSET CONTEXT:
 - Ticker: {req.ticker}
@@ -158,29 +159,37 @@ EXACT JSON SCHEMA:
   "reasoning_summary": "Ringkasan objektif 2-4 kalimat dalam Bahasa Indonesia (bias higher TF, market regime/event risk, konfirmasi utama, alasan SL/TP)."
 }}"""
 
-    final_resp = await llm.complete(
-        [{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": final_prompt}],
-        temperature=0.0,
-        max_tokens=600,
-    )
-    if final_resp.provider != primary and not seen_provider_fallback:
-        seen_provider_fallback = True
-        yield _sse("provider_fallback", {"from": primary, "to": final_resp.provider, "stage": "final"})
+        final_resp = await llm.complete(
+            [{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": final_prompt}],
+            temperature=0.0,
+            max_tokens=600,
+        )
+        if final_resp.provider != primary and not seen_provider_fallback:
+            seen_provider_fallback = True
+            yield _sse("provider_fallback", {"from": primary, "to": final_resp.provider, "stage": "final"})
 
-    async def repair_call(prompt: str, _malformed: str) -> str:
-        r = await llm.quick_complete(prompt)
-        return r.text
+        async def repair_call(prompt: str, _malformed: str) -> str:
+            r = await llm.quick_complete(prompt)
+            return r.text
 
-    signal = await repair_or_hold(final_resp.text, repair_call=repair_call)
+        signal = await repair_or_hold(final_resp.text, repair_call=repair_call)
 
-    # Enforce event_risk hard block at output
-    if risk.blocked_entry and signal.action != Action.HOLD:
-        signal = hold_fallback(f"Event risk memblokir entry: {'; '.join(risk.reasons) if risk.reasons else 'blocked'}")
+        # Enforce event_risk hard block at output
+        if risk.blocked_entry and signal.action != Action.HOLD:
+            signal = hold_fallback(f"Event risk memblokir entry: {'; '.join(risk.reasons) if risk.reasons else 'blocked'}")
 
-    yield _sse("final", {
-        "signal": signal.model_dump(),
-        "provider": final_resp.provider,
-        "model": final_resp.model,
-        "analyst_notes": analyst_notes,
-        "debate": {"bull": bull.text.strip(), "bear": bear.text.strip()},
-    })
+        yield _sse("final", {
+            "signal": signal.model_dump(),
+            "provider": final_resp.provider,
+            "model": final_resp.model,
+            "analyst_notes": analyst_notes,
+            "debate": {"bull": bull.text.strip(), "bear": bear.text.strip()},
+        })
+    except Exception as e:
+        yield _sse("error", {"error": str(e)})
+        yield _sse("final", {
+            "signal": hold_fallback(f"AI analysis unavailable: {e}").model_dump(),
+            "provider": "fallback",
+            "model": None,
+            "error": str(e),
+        })
