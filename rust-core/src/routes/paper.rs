@@ -7,7 +7,11 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::models::market::AssetClass;
+use crate::engine::guardrail::{self, GuardrailInput};
+use crate::engine::indicators::compute_exec_features;
+use crate::engine::regime::RegimeEngine;
+use crate::models::market::{AssetClass, CorrelationGroup, Timeframe};
+use crate::models::signal::{Action, OpenPosition, PortfolioRiskState, ProposedSignal};
 use crate::routes::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -21,7 +25,15 @@ pub struct PaperOrderRequest {
     pub stop_loss: Option<Decimal>,
     pub take_profit: Option<Decimal>,
     pub position_size: Decimal,
-    pub guardrail_approved: bool,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub guardrail_approved: bool, // client hint ignored; server evaluates
+    #[serde(default = "default_timeframe")]
+    pub timeframe: String,
+}
+
+fn default_timeframe() -> String {
+    "15m".to_owned()
 }
 
 pub async fn place_paper_order(
@@ -29,25 +41,99 @@ pub async fn place_paper_order(
     Json(req): Json<PaperOrderRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let asset_class: AssetClass = req.asset_class.parse().map_err(bad_request)?;
+    let timeframe: Timeframe = req.timeframe.parse().map_err(bad_request)?;
     let ticker = req.ticker.trim().to_uppercase();
     let side = req.side.trim().to_uppercase();
-    if side != "BUY" && side != "SELL" {
-        return Err(bad_request("side must be BUY or SELL".into()));
-    }
-    if !req.guardrail_approved {
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(json!({"error":"guardrail_approved must be true"})),
-        ));
-    }
+    let action = match side.as_str() {
+        "BUY" => Action::Buy,
+        "SELL" => Action::Sell,
+        _ => return Err(bad_request("side must be BUY or SELL".into())),
+    };
     if req.position_size <= Decimal::ZERO || req.entry_price <= Decimal::ZERO {
         return Err(bad_request(
             "entry_price and position_size must be > 0".into(),
         ));
     }
+    let stop_loss = req
+        .stop_loss
+        .ok_or_else(|| bad_request("stop_loss is required".into()))?;
+    let take_profit = req
+        .take_profit
+        .ok_or_else(|| bad_request("take_profit is required".into()))?;
+
+    let group = req
+        .correlation_group
+        .clone()
+        .unwrap_or_else(|| "general".into());
+    let correlation_group = CorrelationGroup::from(group.clone());
+
+    let proposed = ProposedSignal {
+        asset_class,
+        ticker: ticker.clone(),
+        correlation_group: correlation_group.clone(),
+        timeframe,
+        action,
+        confidence: 1.0,
+        entry_price: req.entry_price,
+        stop_loss,
+        take_profit,
+        reasoning_summary: "paper order request".to_owned(),
+        llm_provider_used: None,
+    };
+
+    let candles = crate::routes::candles::fetch_candles_db(
+        &state,
+        asset_class,
+        &ticker,
+        timeframe,
+        None,
+        None,
+        200,
+    )
+    .await
+    .map_err(internal_error)?;
+    let exec = compute_exec_features(asset_class, &ticker, timeframe, &candles);
+    let atr = exec.as_ref().and_then(|f| f.atr_14).unwrap_or(Decimal::ONE);
+    let live_price = fetch_live_price(&state, &ticker)
+        .await
+        .unwrap_or(req.entry_price);
+    let portfolio = load_portfolio_state(&state, asset_class)
+        .await
+        .map_err(internal_error)?;
+    let regime = load_regime(&state, asset_class).await;
+    let event_risk = crate::engine::event_risk::evaluate(
+        asset_class,
+        &ticker,
+        &crate::engine::event_risk::EventRiskInput::default(),
+    );
+
+    let validated = guardrail::evaluate(&GuardrailInput {
+        signal: proposed,
+        live_price,
+        atr_14: atr,
+        portfolio,
+        event_risk: event_risk.clone(),
+        market_regime: regime,
+        equity: Decimal::from(10_000u64),
+        base_position_size: req.position_size,
+        daily_drawdown_limit_pct: Decimal::from(2u64),
+        weekly_drawdown_limit_pct: Decimal::from(5u64),
+    });
+
+    if !validated.approved {
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({
+                "error": "guardrail_rejected",
+                "reject_reasons": validated.reject_reasons,
+                "risk_reward_ratio": validated.risk_reward_ratio.map(|v| v.to_string()),
+                "position_size": validated.position_size.map(|v| v.to_string()),
+            })),
+        ));
+    }
 
     let id = Uuid::new_v4();
-    let group = req.correlation_group.unwrap_or_else(|| "general".into());
+    let approved_size = validated.position_size.unwrap_or(req.position_size);
     sqlx::query(
         r#"INSERT INTO paper_orders (
             id, signal_id, asset_class, ticker, correlation_group, side, status,
@@ -61,16 +147,15 @@ pub async fn place_paper_order(
     .bind(&group)
     .bind(&side)
     .bind(req.entry_price)
-    .bind(req.stop_loss)
-    .bind(req.take_profit)
-    .bind(req.position_size)
+    .bind(stop_loss)
+    .bind(take_profit)
+    .bind(approved_size)
     .bind(req.entry_price)
-    .bind(req.guardrail_approved)
+    .bind(true)
     .execute(&state.db)
     .await
     .map_err(internal_error)?;
 
-    // Update portfolio risk state (baseline: ensure global row exists, mark breaker false unless already active)
     sqlx::query(
         r#"INSERT INTO portfolio_risk_state (scope, asset_class, equity, daily_pnl_pct, weekly_pnl_pct, peak_equity, drawdown_pct, circuit_breaker_active, updated_at)
            VALUES ('global', NULL, 10000, 0, 0, 10000, 0, false, $1)
@@ -83,7 +168,14 @@ pub async fn place_paper_order(
 
     Ok((
         StatusCode::CREATED,
-        Json(json!({"id": id, "status":"open"})),
+        Json(json!({
+            "id": id,
+            "status":"open",
+            "guardrail_approved": true,
+            "reject_reasons": [],
+            "position_size": approved_size.to_string(),
+            "risk_reward_ratio": validated.risk_reward_ratio.map(|v| v.to_string())
+        })),
     ))
 }
 
@@ -124,6 +216,85 @@ pub async fn get_paper_portfolio(
             "circuit_breaker_active": circuit_breaker_active
         }
     })))
+}
+
+async fn fetch_live_price(state: &AppState, ticker: &str) -> anyhow::Result<Decimal> {
+    let mut conn = state.redis.get_multiplexed_async_connection().await?;
+    let key = crate::adapters::binance::live_price_key(ticker);
+    let val: Option<String> = redis::AsyncCommands::get(&mut conn, &key).await?;
+    let Some(v) = val else {
+        anyhow::bail!("no live price")
+    };
+    Ok(v.parse()?)
+}
+
+async fn load_portfolio_state(
+    state: &AppState,
+    asset_class: AssetClass,
+) -> anyhow::Result<PortfolioRiskState> {
+    let row = sqlx::query_as::<_, (Decimal, Decimal, bool)>(
+        "SELECT daily_pnl_pct, weekly_pnl_pct, circuit_breaker_active FROM portfolio_risk_state WHERE scope='global' ORDER BY updated_at DESC LIMIT 1",
+    )
+    .fetch_optional(&state.db)
+    .await?;
+    let open_positions = sqlx::query_as::<_, (String, Decimal)>(
+        "SELECT correlation_group, position_size FROM paper_orders WHERE status='open' AND asset_class=$1",
+    )
+    .bind(asset_class.as_str())
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(|(group, size)| OpenPosition {
+        correlation_group: CorrelationGroup::from(group),
+        asset_class,
+        ticker: String::new(),
+        side: Action::Buy,
+        notional: size,
+    })
+    .collect();
+
+    let Some((daily_pnl_pct, weekly_pnl_pct, circuit_breaker_active)) = row else {
+        return Ok(PortfolioRiskState {
+            open_positions,
+            ..PortfolioRiskState::default()
+        });
+    };
+    Ok(PortfolioRiskState {
+        daily_pnl_pct,
+        weekly_pnl_pct,
+        circuit_breaker_active,
+        open_positions,
+    })
+}
+
+async fn load_regime(
+    state: &AppState,
+    asset_class: AssetClass,
+) -> crate::models::features::MarketRegime {
+    let Ok(engine) = RegimeEngine::with_default() else {
+        return baseline_regime(asset_class);
+    };
+    engine
+        .get_regime(
+            asset_class,
+            &state.binance,
+            &state.alpaca,
+            &state.idx,
+            &state.redis,
+        )
+        .await
+        .unwrap_or_else(|_| baseline_regime(asset_class))
+}
+
+fn baseline_regime(asset_class: AssetClass) -> crate::models::features::MarketRegime {
+    crate::models::features::MarketRegime {
+        asset_class,
+        regime_label: "unknown".into(),
+        volatility_regime: "normal".into(),
+        bias: "neutral".into(),
+        summary: "baseline regime".into(),
+        details: json!({}),
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
