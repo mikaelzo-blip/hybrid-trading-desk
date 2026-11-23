@@ -57,13 +57,13 @@ async def triage_candidates(req: ScoutTriageRequest, router: LLMRouter | None = 
         resp = await router.quick_complete(prompt_text, system="Return only corrected raw JSON.")
         return resp.text
 
-    resp = await router.complete(
-        [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_tokens=1200,
-    )
     try:
+        resp = await router.complete(
+            [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=1200,
+        )
         return await repair_and_validate(resp.text, ScoutTriageOutput, _repair)
     except Exception:
-        # Safe fallback: select none rather than hallucinate
+        # Safe fallback: select none rather than hallucinate / 500 on missing provider
         return ScoutTriageOutput(selected_candidates=[], rejected_summary=[])

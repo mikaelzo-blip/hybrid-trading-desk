@@ -70,14 +70,23 @@ pub async fn run_scout(
         .post(triage_url)
         .json(&triage_body)
         .send()
-        .await
-        .map_err(internal_error)?;
-    let triage_json: Value = triage_resp.json().await.map_err(internal_error)?;
-    let selected = triage_json
-        .get("selected_candidates")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
+        .await;
+    let selected = match triage_resp {
+        Ok(resp) if resp.status().is_success() => resp
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|v| v.get("selected_candidates").and_then(|a| a.as_array()).cloned())
+            .unwrap_or_default(),
+        Ok(resp) => {
+            tracing::warn!(status = %resp.status(), "scout triage returned non-success; continuing with empty selection");
+            Vec::new()
+        }
+        Err(err) => {
+            tracing::warn!(error = %err, "scout triage request failed; continuing with empty selection");
+            Vec::new()
+        }
+    };
 
     let mut saved = Vec::new();
     for (idx, sel) in selected.into_iter().take(deep_limit).enumerate() {

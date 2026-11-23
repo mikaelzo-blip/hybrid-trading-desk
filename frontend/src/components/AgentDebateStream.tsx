@@ -15,13 +15,14 @@ interface Props {
 export default function AgentDebateStream({ events, activeProvider, fallbackNotice, running }: Props) {
   const vision = [...events].reverse().find((e) => e.event === "vision")?.data;
   const visionStatus = typeof vision?.status === "string" ? vision.status : null;
+  const visionReason = typeof vision?.reason === "string" ? vision.reason : null;
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-200">Agent Debate Stream</h2>
         <div className="flex items-center gap-2 text-xs">
           {activeProvider && <span className="rounded bg-cyan-600/20 px-2 py-0.5 text-cyan-300">provider: {activeProvider}</span>}
-          {visionStatus && <span className={`rounded px-2 py-0.5 ${visionStatus === "completed" ? "bg-emerald-600/20 text-emerald-300" : "bg-amber-600/20 text-amber-300"}`}>vision: {visionStatus}</span>}
+          {visionStatus && <span className={`rounded px-2 py-0.5 ${visionStatus === "completed" ? "bg-emerald-600/20 text-emerald-300" : "bg-amber-600/20 text-amber-300"}`} title={visionReason ?? undefined}>vision: {visionStatus}{visionReason ? ` — ${visionReason}` : ""}</span>}
           {running && <span className="text-amber-300">running…</span>}
         </div>
       </div>
