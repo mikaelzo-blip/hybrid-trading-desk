@@ -21,7 +21,6 @@ dependencies = [
   "pandas>=2.2.0",
   "yfinance>=0.2.40",
   "finnhub-python>=2.4.20",
-  "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git",
 ]
 
 [project.optional-dependencies]
