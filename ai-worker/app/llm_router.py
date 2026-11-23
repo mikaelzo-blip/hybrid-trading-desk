@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,11 +23,16 @@ class LLMRouter:
         self.settings = settings or get_settings()
         self._semaphore = asyncio.Semaphore(self.settings.llm_max_concurrency)
         self._last_call_ts: float | None = None
+        self._session_id = f"ses_{uuid.uuid4().hex}"
 
     def _client_for(self, provider: ProviderConfig) -> AsyncOpenAI:
         kwargs: dict[str, Any] = {
             "api_key": provider.api_key or "not-needed",
             "timeout": self.settings.llm_request_timeout_secs,
+            "default_headers": {
+                "x-opencode-session": self._session_id,
+                "User-Agent": "hybrid-trading-desk-ai-worker/0.1.0",
+            },
         }
         if provider.base_url:
             kwargs["base_url"] = provider.base_url

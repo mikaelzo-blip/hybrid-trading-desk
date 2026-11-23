@@ -65,8 +65,8 @@ services:
       RUST_CORE_BASE_URL: ${RUST_CORE_BASE_URL:-http://rust-core:8080}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LLM_PRIMARY_PROVIDER: ${LLM_PRIMARY_PROVIDER:-opencode_zen}
-      LLM_FALLBACK_PROVIDERS: ${LLM_FALLBACK_PROVIDERS:-}
+      LLM_PRIMARY_PROVIDER: ${LLM_PRIMARY_PROVIDER:-opencode_go}
+      LLM_FALLBACK_PROVIDERS: ${LLM_FALLBACK_PROVIDERS:-opencode_zen}
       FREE_TIER_MODE: ${FREE_TIER_MODE:-true}
       LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-1}
       LLM_NODE_DELAY_MS: ${LLM_NODE_DELAY_MS:-1500}
@@ -74,6 +74,9 @@ services:
       OPENCODE_ZEN_BASE_URL: ${OPENCODE_ZEN_BASE_URL:-https://opencode.ai/inference/openai/v1}
       OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY:-}
       OPENCODE_ZEN_MODEL: ${OPENCODE_ZEN_MODEL:-big-pickle}
+      OPENCODE_GO_BASE_URL: ${OPENCODE_GO_BASE_URL:-https://opencode.ai/inference/go/openai/v1}
+      OPENCODE_GO_API_KEY: ${OPENCODE_GO_API_KEY:-}
+      OPENCODE_GO_MODEL: ${OPENCODE_GO_MODEL:-qwen3.8-flash}
     ports:
       - "${AI_WORKER_PORT:-8000}:8000"
     depends_on:
