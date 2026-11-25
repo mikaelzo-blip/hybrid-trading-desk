@@ -275,6 +275,27 @@ mod tests {
     }
 
     #[test]
+    fn layer2_rejects_signal_when_earnings_feed_is_unavailable() {
+        let mut input = base_input();
+        input.signal.asset_class = AssetClass::UsStock;
+        input.signal.ticker = "NVDA".to_owned();
+        input.event_risk = crate::engine::event_risk::evaluate(
+            AssetClass::UsStock,
+            "NVDA",
+            &crate::engine::event_risk::EventRiskInput {
+                earnings_unknown: true,
+                ..Default::default()
+            },
+        );
+        let out = evaluate(&input);
+        assert!(!out.approved);
+        assert!(out
+            .reject_reasons
+            .iter()
+            .any(|r| r.contains("layer2_event_risk")));
+    }
+
+    #[test]
     fn layer3_staleness_rejects_drift() {
         let mut input = base_input();
         input.live_price = dec!(102); // drift 2, atr 2 => max 1

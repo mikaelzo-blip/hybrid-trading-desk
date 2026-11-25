@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Awaitable, Callable, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from app.schemas import AgentSignalOutput, hold_fallback
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -74,13 +77,14 @@ async def repair_and_validate(
     cleaned = strip_think_tags(raw_output)
     try:
         return parse_and_validate(cleaned, model)
-    except (ValueError, json.JSONDecodeError, ValidationError) as err:
+    except ValueError as err:
         if repair_call is None:
             raise
         prompt = (
             "Fix the following malformed output so it strictly matches the required JSON schema. "
             "Return ONLY the corrected raw JSON object, nothing else.\n"
             f"Validation error: {err}\n"
+            f"Required JSON schema: {json.dumps(model.model_json_schema(), ensure_ascii=False)}\n"
             f"Malformed output: {cleaned[:4000]}"
         )
         repaired = await repair_call(prompt, cleaned)
@@ -93,7 +97,8 @@ async def repair_or_hold(
 ) -> AgentSignalOutput:
     try:
         return await repair_and_validate(raw_output, AgentSignalOutput, repair_call)
-    except Exception:
+    except ValueError as err:
+        logger.warning("Final signal failed validation after repair (%s)", type(err).__name__)
         return hold_fallback(
             "Output LLM gagal divalidasi secara skema; fallback aman ke HOLD."
         )

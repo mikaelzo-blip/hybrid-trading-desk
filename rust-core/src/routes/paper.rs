@@ -15,6 +15,20 @@ use crate::models::signal::{Action, OpenPosition, PortfolioRiskState, ProposedSi
 use crate::routes::AppState;
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum PaperOrderInput {
+    Scout(ScoutOrderRequest),
+    Manual(PaperOrderRequest),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScoutOrderRequest {
+    scout_pick_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PaperOrderRequest {
     pub signal_id: Option<Uuid>,
     pub asset_class: String,
@@ -38,8 +52,15 @@ fn default_timeframe() -> String {
 
 pub async fn place_paper_order(
     State(state): State<AppState>,
-    Json(req): Json<PaperOrderRequest>,
+    Json(input): Json<PaperOrderInput>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let (req, scout_pick_id) = match input {
+        PaperOrderInput::Manual(req) => (req, None),
+        PaperOrderInput::Scout(req) => (
+            load_scout_order(&state, req.scout_pick_id).await?,
+            Some(req.scout_pick_id),
+        ),
+    };
     let asset_class: AssetClass = req.asset_class.parse().map_err(bad_request)?;
     let timeframe: Timeframe = req.timeframe.parse().map_err(bad_request)?;
     let ticker = req.ticker.trim().to_uppercase();
@@ -81,7 +102,7 @@ pub async fn place_paper_order(
         llm_provider_used: None,
     };
 
-    let candles = crate::routes::candles::fetch_candles_db(
+    let candles = crate::routes::candles::load_candles(
         &state,
         asset_class,
         &ticker,
@@ -94,18 +115,43 @@ pub async fn place_paper_order(
     .map_err(internal_error)?;
     let exec = compute_exec_features(asset_class, &ticker, timeframe, &candles);
     let atr = exec.as_ref().and_then(|f| f.atr_14).unwrap_or(Decimal::ONE);
-    let live_price = fetch_live_price(&state, &ticker)
-        .await
-        .unwrap_or(req.entry_price);
+    let live_price = match fetch_live_price(&state, &ticker).await {
+        Ok(price) => price,
+        Err(_) if scout_pick_id.is_some() && asset_class == AssetClass::Crypto => {
+            crate::routes::candles::load_candles(
+                &state,
+                asset_class,
+                &ticker,
+                Timeframe::M1,
+                None,
+                None,
+                1,
+            )
+            .await
+            .map_err(internal_error)?
+            .last()
+            .ok_or_else(|| bad_request("No recent crypto price available".into()))?
+            .close
+        }
+        Err(_) if scout_pick_id.is_some() => {
+            exec.as_ref()
+                .ok_or_else(|| bad_request("No recent market price available".into()))?
+                .close
+        }
+        Err(_) => req.entry_price,
+    };
     let portfolio = load_portfolio_state(&state, asset_class)
         .await
         .map_err(internal_error)?;
     let regime = load_regime(&state, asset_class).await;
-    let event_risk = crate::engine::event_risk::evaluate(
+    let event_risk = crate::engine::event_risk::evaluate_with_feeds(
+        &state.finnhub,
+        &state.bea_calendar,
+        &state.config.idx_status_snapshot_path,
         asset_class,
         &ticker,
-        &crate::engine::event_risk::EventRiskInput::default(),
-    );
+    )
+    .await;
 
     let validated = guardrail::evaluate(&GuardrailInput {
         signal: proposed,
@@ -137,8 +183,9 @@ pub async fn place_paper_order(
     sqlx::query(
         r#"INSERT INTO paper_orders (
             id, signal_id, asset_class, ticker, correlation_group, side, status,
-            entry_price, stop_loss, take_profit, position_size, filled_price, guardrail_approved
-        ) VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$11,$12)"#,
+            entry_price, stop_loss, take_profit, position_size, filled_price, guardrail_approved,
+            scout_pick_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$11,$12,$13)"#,
     )
     .bind(id)
     .bind(req.signal_id)
@@ -152,6 +199,7 @@ pub async fn place_paper_order(
     .bind(approved_size)
     .bind(req.entry_price)
     .bind(true)
+    .bind(scout_pick_id)
     .execute(&state.db)
     .await
     .map_err(internal_error)?;
@@ -170,6 +218,7 @@ pub async fn place_paper_order(
         StatusCode::CREATED,
         Json(json!({
             "id": id,
+            "scout_pick_id": scout_pick_id,
             "status":"open",
             "guardrail_approved": true,
             "reject_reasons": [],
@@ -179,11 +228,69 @@ pub async fn place_paper_order(
     ))
 }
 
+#[derive(sqlx::FromRow)]
+struct ScoutOrder {
+    asset_class: String,
+    ticker: String,
+    correlation_group: String,
+    timeframe: String,
+    action: String,
+    entry_price: Option<Decimal>,
+    stop_loss: Option<Decimal>,
+    take_profit: Option<Decimal>,
+    position_size: Option<Decimal>,
+    guardrail_approved: bool,
+}
+
+async fn load_scout_order(
+    state: &AppState,
+    id: Uuid,
+) -> Result<PaperOrderRequest, (StatusCode, Json<Value>)> {
+    let pick = sqlx::query_as::<_, ScoutOrder>(
+        "SELECT asset_class, ticker, correlation_group, timeframe, action, entry_price,
+                stop_loss, take_profit, position_size, guardrail_approved
+         FROM scout_picks WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(internal_error)?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "scout_pick_not_found"})),
+        )
+    })?;
+
+    let not_executable = || {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"error": "scout_pick_not_executable"})),
+        )
+    };
+    if !pick.guardrail_approved || !matches!(pick.action.as_str(), "BUY" | "SELL") {
+        return Err(not_executable());
+    }
+    Ok(PaperOrderRequest {
+        signal_id: None,
+        asset_class: pick.asset_class,
+        ticker: pick.ticker,
+        correlation_group: Some(pick.correlation_group),
+        side: pick.action,
+        entry_price: pick.entry_price.ok_or_else(not_executable)?,
+        stop_loss: Some(pick.stop_loss.ok_or_else(not_executable)?),
+        take_profit: Some(pick.take_profit.ok_or_else(not_executable)?),
+        position_size: pick.position_size.ok_or_else(not_executable)?,
+        guardrail_approved: false,
+        timeframe: pick.timeframe,
+    })
+}
+
 pub async fn get_paper_portfolio(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let orders = sqlx::query_as::<_, PaperOrderRow>(
-        r#"SELECT id, asset_class, ticker, side, status, entry_price, stop_loss, take_profit, position_size, realized_pnl, opened_at, closed_at
+        r#"SELECT id, scout_pick_id, asset_class, ticker, side, status, entry_price, stop_loss, take_profit, position_size, realized_pnl, opened_at, closed_at
            FROM paper_orders ORDER BY opened_at DESC LIMIT 100"#,
     )
     .fetch_all(&state.db)
@@ -203,6 +310,7 @@ pub async fn get_paper_portfolio(
     Ok(Json(json!({
         "orders": orders.into_iter().map(|o| json!({
             "id": o.id, "asset_class": o.asset_class, "ticker": o.ticker, "side": o.side,
+            "scout_pick_id": o.scout_pick_id,
             "status": o.status, "entry_price": o.entry_price.to_string(),
             "stop_loss": o.stop_loss.map(|v| v.to_string()),
             "take_profit": o.take_profit.map(|v| v.to_string()),
@@ -300,6 +408,7 @@ fn baseline_regime(asset_class: AssetClass) -> crate::models::features::MarketRe
 #[derive(Debug, sqlx::FromRow)]
 struct PaperOrderRow {
     id: Uuid,
+    scout_pick_id: Option<Uuid>,
     asset_class: String,
     ticker: String,
     side: String,

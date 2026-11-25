@@ -44,7 +44,7 @@ async fn handle_socket(
     };
     let ticker = ticker_raw.trim().to_uppercase();
 
-    // Send initial snapshot from DB (last 200)
+    // Send the latest candle history before starting the live stream.
     if !send_snapshot(&mut socket, &state, asset_class, &ticker, timeframe).await {
         return;
     }
@@ -90,7 +90,7 @@ async fn send_snapshot(
     ticker: &str,
     timeframe: Timeframe,
 ) -> bool {
-    match crate::routes::candles::fetch_candles_db(
+    match crate::routes::candles::load_candles(
         state,
         asset_class,
         ticker,

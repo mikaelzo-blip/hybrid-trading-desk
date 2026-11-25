@@ -1,7 +1,10 @@
 pub mod alpaca;
+pub mod bea_calendar;
 pub mod binance;
+pub mod finnhub;
 pub mod forex;
 pub mod idx;
+pub mod idx_status;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};

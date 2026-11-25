@@ -1,7 +1,7 @@
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -29,25 +29,9 @@ pub async fn get_candles(
     let start = parse_ms_opt(q.start).map_err(bad_request)?;
     let end = parse_ms_opt(q.end).map_err(bad_request)?;
 
-    let mut candles = fetch_candles_db(&state, asset_class, &ticker, timeframe, start, end, limit)
+    let candles = load_candles(&state, asset_class, &ticker, timeframe, start, end, limit)
         .await
         .map_err(internal_error)?;
-
-    if candles.len() < limit {
-        let fetched =
-            fetch_from_adapter(&state, asset_class, &ticker, timeframe, start, end, limit)
-                .await
-                .map_err(internal_error)?;
-        crate::adapters::binance::BinanceAdapter::persist_candles(&state.db, &fetched)
-            .await
-            .map_err(internal_error)?;
-        candles = fetch_candles_db(&state, asset_class, &ticker, timeframe, start, end, limit)
-            .await
-            .map_err(internal_error)?;
-        if candles.is_empty() {
-            candles = fetched;
-        }
-    }
 
     Ok(Json(json!({
         "asset_class": asset_class.as_str(),
@@ -58,7 +42,71 @@ pub async fn get_candles(
     })))
 }
 
-pub async fn fetch_candles_db(
+pub(super) async fn load_candles(
+    state: &AppState,
+    asset_class: AssetClass,
+    ticker: &str,
+    timeframe: Timeframe,
+    start: Option<DateTime<Utc>>,
+    end: Option<DateTime<Utc>>,
+    limit: usize,
+) -> anyhow::Result<Vec<Candle>> {
+    let crypto_window = (asset_class == AssetClass::Crypto && start.is_none() && end.is_none())
+        .then(|| {
+            let period = crypto_candle_period(timeframe);
+            let now = Utc::now().timestamp();
+            let closed_open = now - now.rem_euclid(period.num_seconds()) - period.num_seconds();
+            (DateTime::from_timestamp(closed_open, 0).unwrap(), period)
+        });
+    let end = crypto_window.map(|(closed_open, _)| closed_open).or(end);
+    let candles =
+        fetch_candles_db(state, asset_class, ticker, timeframe, start, end, limit).await?;
+    if candles.len() == limit
+        && crypto_window
+            .is_none_or(|(closed_open, period)| is_current_window(&candles, closed_open, period))
+    {
+        return Ok(candles);
+    }
+
+    let fetched =
+        fetch_from_adapter(state, asset_class, ticker, timeframe, start, end, limit).await?;
+    if let Some((closed_open, period)) = crypto_window {
+        anyhow::ensure!(
+            is_current_window(&fetched, closed_open, period),
+            "Binance returned stale or incomplete candles for {ticker} {timeframe}"
+        );
+    }
+    crate::adapters::binance::BinanceAdapter::persist_candles(&state.db, &fetched).await?;
+    if crypto_window.is_some() {
+        return Ok(fetched);
+    }
+
+    let candles =
+        fetch_candles_db(state, asset_class, ticker, timeframe, start, end, limit).await?;
+    Ok(if candles.is_empty() { fetched } else { candles })
+}
+
+fn crypto_candle_period(timeframe: Timeframe) -> TimeDelta {
+    TimeDelta::minutes(match timeframe {
+        Timeframe::M1 => 1,
+        Timeframe::M5 => 5,
+        Timeframe::M15 => 15,
+        Timeframe::H1 => 60,
+        Timeframe::H4 => 240,
+        Timeframe::D1 => 1440,
+    })
+}
+
+fn is_current_window(candles: &[Candle], closed_open: DateTime<Utc>, period: TimeDelta) -> bool {
+    candles
+        .last()
+        .is_some_and(|last| last.open_time == closed_open)
+        && candles
+            .windows(2)
+            .all(|pair| pair[1].open_time - pair[0].open_time == period)
+}
+
+async fn fetch_candles_db(
     state: &AppState,
     asset_class: AssetClass,
     ticker: &str,
@@ -80,7 +128,8 @@ pub async fn fetch_candles_db(
         sql.push_str(&format!(" AND open_time <= ${param_idx}"));
         param_idx += 1;
     }
-    sql.push_str(&format!(" ORDER BY open_time ASC LIMIT ${param_idx}"));
+    let order = if start.is_some() { "ASC" } else { "DESC" };
+    sql.push_str(&format!(" ORDER BY open_time {order} LIMIT ${param_idx}"));
 
     let mut q = sqlx::query_as::<_, CandleRow>(&sql)
         .bind(asset_class.as_str())
@@ -94,7 +143,10 @@ pub async fn fetch_candles_db(
     }
     q = q.bind(limit as i64);
 
-    let rows = q.fetch_all(&state.db).await?;
+    let mut rows = q.fetch_all(&state.db).await?;
+    if start.is_none() {
+        rows.reverse();
+    }
     rows.into_iter().map(CandleRow::into_candle).collect()
 }
 
@@ -176,4 +228,40 @@ fn internal_error(err: anyhow::Error) -> (StatusCode, Json<Value>) {
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(json!({ "error": "internal server error" })),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal::Decimal;
+
+    #[test]
+    fn latest_crypto_window_rejects_stale_candles_gaps_and_open_candle() {
+        let closed_open = DateTime::from_timestamp(1_800, 0).unwrap();
+        let period = crypto_candle_period(Timeframe::M15);
+        let candle = |offset: i32| Candle {
+            asset_class: AssetClass::Crypto,
+            ticker: "BTCUSDT".into(),
+            timeframe: Timeframe::M15,
+            open_time: closed_open + period * offset,
+            open: Decimal::ONE,
+            high: Decimal::ONE,
+            low: Decimal::ONE,
+            close: Decimal::ONE,
+            volume: Decimal::ONE,
+        };
+
+        assert!(is_current_window(
+            &[candle(-1), candle(0)],
+            closed_open,
+            period
+        ));
+        for window in [
+            [candle(-2), candle(-1)],
+            [candle(-2), candle(0)],
+            [candle(0), candle(1)],
+        ] {
+            assert!(!is_current_window(&window, closed_open, period));
+        }
+    }
 }

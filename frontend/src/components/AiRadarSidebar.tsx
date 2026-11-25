@@ -74,7 +74,9 @@ export default function AiRadarSidebar({ assetClass, onSelect }: Props) {
               <span className={`rounded px-1.5 py-0.5 ${p.action === "BUY" ? "bg-emerald-600/20 text-emerald-300" : p.action === "SELL" ? "bg-rose-600/20 text-rose-300" : "bg-slate-700/40 text-slate-300"}`}>{p.action}</span>
             </div>
             <div className="mt-1 text-slate-400">conf {(p.confidence * 100).toFixed(0)}% · {p.guardrail_approved ? "approved" : "rejected"}</div>
-            <div className="text-slate-500 truncate" title={p.reasoning_summary}>{p.reasoning_summary}</div>
+            <div className="mt-1 line-clamp-3 leading-relaxed text-slate-400 [overflow-wrap:anywhere]" title={p.reasoning_summary}>
+              {p.reasoning_summary}
+            </div>
           </button>
         ))}
       </div>

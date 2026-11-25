@@ -217,10 +217,11 @@ Karena model free/open-weight dan model reasoning di OpenCode Zen/Go terkadang m
 1. **Sanitasi Reasoning Tags:** Hapus seluruh blok `<think>...</think>` (case-insensitive, multiline) dari raw output LLM.
 2. **Ekstraksi JSON:** Hapus markdown code fence (` ```json ` / ` ``` `) lalu ekstrak substring dari kurung kurawal `{` pertama sampai `}` terakhir yang seimbang.
 3. **Validasi Pydantic v2:** Parse ke model target (`AgentSignalOutput`, `VisionAnalysisOutput`, atau `ScoutTriageOutput`).
-4. **1x Repair Retry (`quick_think_llm`):** Jika parse/validasi gagal, panggil `quick_think_llm` sekali saja dengan prompt singkat:
+4. **1x Repair Retry:** Jika parse/validasi gagal, panggil model sekali lagi dengan skema JSON target dan output awal yang dipotong. Untuk sinyal trading, sertakan juga konteks pasar semula dan larang model mengarang level harga:
    ```
    Fix the following malformed output so it strictly matches the required JSON schema. Return ONLY the corrected raw JSON object, nothing else.
    Validation error: {{pydantic_error}}
+   Required JSON schema: {{target_json_schema}}
    Malformed output: {{raw_output_truncated}}
    ```
 5. **Safe Fallback:** Jika retry masih gagal, **jangan pernah crash** dan jangan kirim data korup ke `rust-core`:

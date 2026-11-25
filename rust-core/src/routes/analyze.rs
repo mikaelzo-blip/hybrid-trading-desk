@@ -17,8 +17,9 @@ use crate::engine::guardrail::{self, GuardrailInput};
 use crate::engine::indicators::{compute_exec_features, compute_higher_tf_context};
 use crate::engine::regime::RegimeEngine;
 use crate::models::features::{higher_timeframe_for, EventRisk};
-use crate::models::market::{AssetClass, Candle, CorrelationGroup, Timeframe};
+use crate::models::market::{AssetClass, CorrelationGroup, Timeframe};
 use crate::models::signal::{Action, PortfolioRiskState, ProposedSignal};
+use crate::routes::candles::load_candles;
 use crate::routes::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -63,12 +64,13 @@ async fn run_analyze(
     let ticker = req.ticker.trim().to_uppercase();
 
     // 1) Load candles for exec TF and higher TF
-    let exec_candles = load_candles(&state, asset_class, &ticker, timeframe, 200).await?;
+    let exec_candles =
+        load_candles(&state, asset_class, &ticker, timeframe, None, None, 200).await?;
     if exec_candles.is_empty() {
         anyhow::bail!("no candles available for {ticker} {timeframe}");
     }
     let htf = higher_timeframe_for(timeframe);
-    let htf_candles = load_candles(&state, asset_class, &ticker, htf, 200).await?;
+    let htf_candles = load_candles(&state, asset_class, &ticker, htf, None, None, 200).await?;
 
     let exec_features = compute_exec_features(asset_class, &ticker, timeframe, &exec_candles)
         .ok_or_else(|| anyhow::anyhow!("failed to compute exec features"))?;
@@ -93,7 +95,7 @@ async fn run_analyze(
             summary: "regime unavailable".into(),
             details: json!({}),
         });
-    let event_risk = compute_event_risk(asset_class, &ticker);
+    let event_risk = compute_event_risk(&state, asset_class, &ticker).await;
 
     // 3) Proxy SSE from ai-worker
     let ai_payload = json!({
@@ -212,25 +214,6 @@ async fn run_analyze(
     Ok(())
 }
 
-async fn load_candles(
-    state: &AppState,
-    asset_class: AssetClass,
-    ticker: &str,
-    timeframe: Timeframe,
-    limit: usize,
-) -> anyhow::Result<Vec<Candle>> {
-    crate::routes::candles::fetch_candles_db(
-        state,
-        asset_class,
-        ticker,
-        timeframe,
-        None,
-        None,
-        limit,
-    )
-    .await
-}
-
 async fn fetch_live_price(state: &AppState, ticker: &str) -> anyhow::Result<Decimal> {
     let mut conn = state.redis.get_multiplexed_async_connection().await?;
     let key = crate::adapters::binance::live_price_key(ticker);
@@ -241,10 +224,15 @@ async fn fetch_live_price(state: &AppState, ticker: &str) -> anyhow::Result<Deci
     Ok(v.parse()?)
 }
 
-fn compute_event_risk(asset_class: AssetClass, ticker: &str) -> EventRisk {
-    // Baseline: use deterministic engine; external calendar feeds can enrich EventRiskInput later.
-    let input = crate::engine::event_risk::EventRiskInput::default();
-    crate::engine::event_risk::evaluate(asset_class, ticker, &input)
+async fn compute_event_risk(state: &AppState, asset_class: AssetClass, ticker: &str) -> EventRisk {
+    crate::engine::event_risk::evaluate_with_feeds(
+        &state.finnhub,
+        &state.bea_calendar,
+        &state.config.idx_status_snapshot_path,
+        asset_class,
+        ticker,
+    )
+    .await
 }
 
 fn parse_sse_block(block: &str) -> Option<(String, Value)> {

@@ -27,13 +27,9 @@ export default function TradeSignalPanel({ signal, guardrail, onAnalyze, analyzi
   const canExecute = !!signal && !!guardrail?.approved && (signal.action === "BUY" || signal.action === "SELL");
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 space-y-3">
         <h2 className="text-sm font-semibold text-slate-200">Trade Signal</h2>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs text-slate-300">
-            <input type="checkbox" checked={!!enableVision} onChange={(e) => onToggleVision?.(e.target.checked)} />
-            Enable Chart Vision
-          </label>
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onAnalyze}
@@ -51,6 +47,10 @@ export default function TradeSignalPanel({ signal, guardrail, onAnalyze, analyzi
             {executingPaper ? "Executing..." : "Execute Paper Trade"}
           </button>
         </div>
+        <label className="flex w-fit items-center gap-2 text-xs text-slate-300">
+          <input type="checkbox" checked={!!enableVision} onChange={(e) => onToggleVision?.(e.target.checked)} />
+          Enable Chart Vision
+        </label>
       </div>
 
       {!signal && <div className="text-xs text-slate-500">No signal yet.</div>}

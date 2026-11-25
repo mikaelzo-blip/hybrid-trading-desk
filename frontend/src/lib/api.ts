@@ -161,6 +161,7 @@ export interface PortfolioRiskState {
 
 export interface PaperOrder {
   id: string;
+  scout_pick_id: string | null;
   asset_class: string;
   ticker: string;
   side: string;
@@ -183,17 +184,55 @@ export async function fetchPaperPortfolio(): Promise<PaperPortfolio> {
   return (await res.json()) as PaperPortfolio;
 }
 
+export interface PaperAudit {
+  window: { days: number; start: string; end: string };
+  entry_drift: { sample_count: number; mean_absolute_pct: string | null };
+  guardrail: {
+    directional_signals: number;
+    rejected_signals: number;
+    rejection_reasons: Record<string, number>;
+  };
+  closed_orders: {
+    sample_count: number;
+    realized_sample_count: number;
+    r_multiple: {
+      sample_count: number;
+      mean: string | null;
+      distribution: {
+        negative: number;
+        flat: number;
+        under_one: number;
+        one_to_two: number;
+        two_plus: number;
+      };
+    } | null;
+    confidence_calibration: {
+      min_confidence_pct: number;
+      max_confidence_pct: number;
+      sample_count: number;
+      win_rate_pct: string;
+    }[] | null;
+  };
+}
+
+export async function fetchPaperAudit(signal?: AbortSignal): Promise<PaperAudit> {
+  const res = await fetch(`${API_BASE}/api/paper/audit`, { cache: "no-store", signal });
+  if (!res.ok) throw new Error(`Paper audit unavailable (${res.status})`);
+  return (await res.json()) as PaperAudit;
+}
+
 export async function placePaperOrder(body: {
   signal_id?: string;
   asset_class: AssetClass;
   ticker: string;
+  timeframe: Timeframe;
   side: "BUY" | "SELL";
   entry_price: string;
   stop_loss?: string;
   take_profit?: string;
   position_size: string;
   guardrail_approved: boolean;
-}): Promise<{ id: string; status: string }> {
+} | { scout_pick_id: string }): Promise<{ id: string; status: string }> {
   const res = await fetch(`${API_BASE}/api/paper/orders`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -212,6 +251,7 @@ export interface ScoutPick {
   run_id: string;
   asset_class: AssetClass;
   ticker: string;
+  timeframe: Timeframe;
   strategy_tag: string;
   action: "BUY" | "SELL" | "HOLD";
   confidence: number;

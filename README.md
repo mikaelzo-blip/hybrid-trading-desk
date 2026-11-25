@@ -82,12 +82,26 @@ See `.env.example` for the full list. Important groups:
 - **Vision:** `ENABLE_CHART_VISION`, `VISION_MODEL` (graceful skip if unsupported/unset/429)
 - **Scout:** `SCOUT_MAX_DEEP_DIVE`, scheduler uses WIB (`Asia/Jakarta`)
 
+### Use a free model through 9Router
+
+With [9Router](https://9router.github.io/en/getting-started/quick-start/) running on the host, choose a free model ID from `http://localhost:20128/v1/models` and add these settings to `.env`:
+
+```dotenv
+LLM_PRIMARY_PROVIDER=9router
+LLM_FALLBACK_PROVIDERS=
+NINE_ROUTER_BASE_URL=http://host.docker.internal:20128/v1
+NINE_ROUTER_API_KEY=
+NINE_ROUTER_MODEL=
+```
+
+Fill in the key from the 9Router dashboard and the exact model ID. For a worker running outside Docker, use `http://localhost:20128/v1`. Apply Docker settings with `docker compose up -d --build --no-deps ai-worker`. An empty fallback keeps the worker from switching to another provider.
+
 ## Main API Surface
 
-- `GET /api/candles` — OHLCV candles (all 4 asset classes)
+- `GET /api/candles` — OHLCV candles (all 4 asset classes). With no date range, crypto history ends at the latest closed Binance candle; stale or gapped history is refetched. Live, in-progress candles arrive over WebSocket.
 - `GET /api/regime/{asset_class}` — market regime snapshot
 - `POST /api/analyze` — SSE analysis stream; rust-core computes features/regime/event-risk, proxies ai-worker, applies guardrail, persists signal
-- `POST /api/paper/orders` — create paper order (`guardrail_approved=true` required)
+- `POST /api/paper/orders` — re-evaluate guardrails and create a simulated order. For Scout, send only `{"scout_pick_id":"<uuid>"}`; the server loads the approved BUY/SELL and records its ID on the order.
 - `GET /api/paper/portfolio` — paper orders + portfolio risk state
 - `POST /api/scout/run` — Stage 1 screener -> Stage 2 triage -> Stage 3 sequential deep dive -> guardrail -> `scout_picks`
 - `GET /api/scout/picks` — AI Radar picks

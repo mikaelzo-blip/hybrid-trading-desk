@@ -28,7 +28,7 @@ def _int(name: str, default: int) -> int:
 
 def _csv(name: str, default: list[str] | None = None) -> list[str]:
     raw = os.getenv(name)
-    if raw is None or not raw.strip():
+    if raw is None:
         return list(default or [])
     return [part.strip() for part in raw.split(",") if part.strip()]
 
@@ -45,6 +45,8 @@ class ProviderConfig:
         # ollama may not need api key; others need model and key/base depending on provider
         if not self.model:
             return False
+        if self.name == "9router":
+            return bool(self.base_url and self.api_key)
         if self.name == "ollama":
             return bool(self.base_url)
         return bool(self.api_key or self.base_url)
@@ -104,6 +106,12 @@ class Settings:
                 base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
                 api_key=os.getenv("OPENROUTER_API_KEY"),
                 model=os.getenv("OPENROUTER_MODEL"),
+            ),
+            "9router": ProviderConfig(
+                name="9router",
+                base_url=os.getenv("NINE_ROUTER_BASE_URL"),
+                api_key=os.getenv("NINE_ROUTER_API_KEY"),
+                model=os.getenv("NINE_ROUTER_MODEL"),
             ),
             "ollama": ProviderConfig(
                 name="ollama",

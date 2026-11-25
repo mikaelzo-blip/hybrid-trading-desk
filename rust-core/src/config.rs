@@ -1,5 +1,6 @@
 use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 /// Runtime configuration parsed from environment variables.
 #[derive(Debug, Clone)]
@@ -15,9 +16,12 @@ pub struct AppConfig {
     pub alpaca_paper_url: String,
     pub alpaca_api_key: Option<String>,
     pub alpaca_api_secret: Option<String>,
+    pub finnhub_base_url: String,
+    pub finnhub_api_key: Option<String>,
     pub twelve_data_base_url: String,
     pub twelve_data_api_key: Option<String>,
     pub yahoo_finance_base_url: String,
+    pub idx_status_snapshot_path: PathBuf,
 }
 
 impl AppConfig {
@@ -52,12 +56,19 @@ impl AppConfig {
             alpaca_paper_url: env_or("ALPACA_BASE_URL", "https://paper-api.alpaca.markets"),
             alpaca_api_key: optional("ALPACA_API_KEY"),
             alpaca_api_secret: optional("ALPACA_API_SECRET"),
+            finnhub_base_url: env_or("FINNHUB_BASE_URL", "https://finnhub.io/api/v1"),
+            finnhub_api_key: optional("FINNHUB_API_KEY"),
             twelve_data_base_url: env_or("TWELVE_DATA_BASE_URL", "https://api.twelvedata.com"),
             twelve_data_api_key: optional("TWELVE_DATA_API_KEY"),
             yahoo_finance_base_url: env_or(
                 "YAHOO_FINANCE_BASE_URL",
                 "https://query1.finance.yahoo.com",
             ),
+            idx_status_snapshot_path: env_or(
+                "IDX_STATUS_SNAPSHOT_PATH",
+                "docker-data/idx/market-status.json",
+            )
+            .into(),
         })
     }
 }

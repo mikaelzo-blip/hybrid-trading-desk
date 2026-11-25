@@ -1,12 +1,15 @@
 #![allow(dead_code)]
 
+use std::path::Path;
+
 use anyhow::Result;
 use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::engine::event_risk::{evaluate, EventRiskInput};
+use crate::adapters::{bea_calendar::BeaCalendar, finnhub::FinnhubAdapter};
+use crate::engine::event_risk::evaluate_with_feeds;
 use crate::models::market::AssetClass;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +60,9 @@ pub fn correlation_group(asset_class: AssetClass, ticker: &str) -> String {
 
 pub async fn screen_top_candidates(
     db: &PgPool,
+    finnhub: &FinnhubAdapter,
+    bea: &BeaCalendar,
+    idx_snapshot: &Path,
     asset_class: AssetClass,
     limit: i64,
 ) -> Result<Vec<ScoutCandidate>> {
@@ -102,7 +108,7 @@ pub async fn screen_top_candidates(
             continue;
         }
 
-        let event = evaluate(asset_class, ticker, &EventRiskInput::default());
+        let event = evaluate_with_feeds(finnhub, bea, idx_snapshot, asset_class, ticker).await;
         out.push(ScoutCandidate {
             asset_class,
             ticker: ticker.to_string(),

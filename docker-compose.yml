@@ -44,7 +44,15 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       RUST_CORE_PORT: ${RUST_CORE_PORT:-8080}
       AI_WORKER_BASE_URL: ${AI_WORKER_BASE_URL:-http://ai-worker:8000}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_API_SECRET: ${ALPACA_API_SECRET:-}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      FINNHUB_BASE_URL: ${FINNHUB_BASE_URL:-https://finnhub.io/api/v1}
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
+      IDX_STATUS_SNAPSHOT_PATH: /app/docker-data/idx/market-status.json
       RUST_LOG: ${RUST_LOG:-info,rust_core=debug}
+    volumes:
+      - ./docker-data/idx:/app/docker-data/idx:ro
     ports:
       - "${RUST_CORE_HOST_PORT:-${RUST_CORE_PORT:-8080}}:8080"
     depends_on:
@@ -66,7 +74,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LLM_PRIMARY_PROVIDER: ${LLM_PRIMARY_PROVIDER:-opencode_go}
-      LLM_FALLBACK_PROVIDERS: ${LLM_FALLBACK_PROVIDERS:-opencode_zen}
+      LLM_FALLBACK_PROVIDERS: ${LLM_FALLBACK_PROVIDERS-opencode_zen}
       FREE_TIER_MODE: ${FREE_TIER_MODE:-true}
       LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-1}
       LLM_NODE_DELAY_MS: ${LLM_NODE_DELAY_MS:-1500}
@@ -77,6 +85,12 @@ services:
       OPENCODE_GO_BASE_URL: ${OPENCODE_GO_BASE_URL:-https://opencode.ai/inference/go/openai/v1}
       OPENCODE_GO_API_KEY: ${OPENCODE_GO_API_KEY:-}
       OPENCODE_GO_MODEL: ${OPENCODE_GO_MODEL:-qwen3.8-flash}
+      NINE_ROUTER_BASE_URL: ${NINE_ROUTER_BASE_URL:-http://host.docker.internal:20128/v1}
+      NINE_ROUTER_API_KEY: ${NINE_ROUTER_API_KEY:-}
+      NINE_ROUTER_MODEL: ${NINE_ROUTER_MODEL:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
     ports:
       - "${AI_WORKER_PORT:-8000}:8000"
     depends_on:

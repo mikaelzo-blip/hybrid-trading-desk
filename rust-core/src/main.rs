@@ -13,7 +13,9 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
 
 use crate::adapters::alpaca::AlpacaAdapter;
+use crate::adapters::bea_calendar::{BeaCalendar, BEA_CALENDAR_URL};
 use crate::adapters::binance::BinanceAdapter;
+use crate::adapters::finnhub::FinnhubAdapter;
 use crate::adapters::forex::ForexAdapter;
 use crate::adapters::idx::IdxAdapter;
 use crate::routes::AppState;
@@ -47,6 +49,10 @@ async fn main() -> anyhow::Result<()> {
         config.alpaca_api_key.clone(),
         config.alpaca_api_secret.clone(),
     )?);
+    let finnhub = Arc::new(FinnhubAdapter::new(
+        config.finnhub_base_url.clone(),
+        config.finnhub_api_key.clone(),
+    )?);
     let forex = Arc::new(ForexAdapter::new(
         config.twelve_data_base_url.clone(),
         config.twelve_data_api_key.clone(),
@@ -59,6 +65,8 @@ async fn main() -> anyhow::Result<()> {
         redis,
         binance,
         alpaca,
+        finnhub,
+        bea_calendar: Arc::new(BeaCalendar::new(BEA_CALENDAR_URL)?),
         forex,
         idx,
     };
@@ -83,6 +91,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/paper/portfolio",
             get(routes::paper::get_paper_portfolio),
+        )
+        .route(
+            "/api/paper/audit",
+            get(routes::paper_audit::get_paper_audit),
         )
         .route(
             "/api/scout/run",

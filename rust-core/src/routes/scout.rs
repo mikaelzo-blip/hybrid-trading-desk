@@ -43,9 +43,16 @@ pub async fn run_scout(
         .unwrap_or(true);
     let deep_limit = if free_tier { max_deep.min(5) } else { max_deep };
 
-    let candidates = screener::screen_top_candidates(&state.db, asset_class, 15)
-        .await
-        .map_err(internal_error)?;
+    let candidates = screener::screen_top_candidates(
+        &state.db,
+        &state.finnhub,
+        &state.bea_calendar,
+        &state.config.idx_status_snapshot_path,
+        asset_class,
+        15,
+    )
+    .await
+    .map_err(internal_error)?;
 
     let triage_body = json!({
         "asset_class": asset_class.as_str(),
@@ -66,17 +73,17 @@ pub async fn run_scout(
         "{}/scout/triage",
         state.config.ai_worker_base_url.trim_end_matches('/')
     );
-    let triage_resp = client
-        .post(triage_url)
-        .json(&triage_body)
-        .send()
-        .await;
+    let triage_resp = client.post(triage_url).json(&triage_body).send().await;
     let selected = match triage_resp {
         Ok(resp) if resp.status().is_success() => resp
             .json::<Value>()
             .await
             .ok()
-            .and_then(|v| v.get("selected_candidates").and_then(|a| a.as_array()).cloned())
+            .and_then(|v| {
+                v.get("selected_candidates")
+                    .and_then(|a| a.as_array())
+                    .cloned()
+            })
             .unwrap_or_default(),
         Ok(resp) => {
             tracing::warn!(status = %resp.status(), "scout triage returned non-success; continuing with empty selection");
@@ -107,7 +114,7 @@ pub async fn run_scout(
             .unwrap_or("")
             .to_string();
 
-        let candles = crate::routes::candles::fetch_candles_db(
+        let candles = crate::routes::candles::load_candles(
             &state,
             asset_class,
             ticker,
@@ -123,17 +130,10 @@ pub async fn run_scout(
         }
 
         let htf = higher_timeframe_for(Timeframe::H1);
-        let htf_candles = crate::routes::candles::fetch_candles_db(
-            &state,
-            asset_class,
-            ticker,
-            htf,
-            None,
-            None,
-            240,
-        )
-        .await
-        .unwrap_or_default();
+        let htf_candles =
+            crate::routes::candles::load_candles(&state, asset_class, ticker, htf, None, None, 240)
+                .await
+                .unwrap_or_default();
         let Some(exec_features) =
             compute_exec_features(asset_class, ticker, Timeframe::H1, &candles)
         else {
@@ -156,11 +156,14 @@ pub async fn run_scout(
         } else {
             baseline_regime(asset_class)
         };
-        let event_risk = crate::engine::event_risk::evaluate(
+        let event_risk = crate::engine::event_risk::evaluate_with_feeds(
+            &state.finnhub,
+            &state.bea_calendar,
+            &state.config.idx_status_snapshot_path,
             asset_class,
             ticker,
-            &crate::engine::event_risk::EventRiskInput::default(),
-        );
+        )
+        .await;
 
         let analyze_body = json!({
             "asset_class": asset_class.as_str(),

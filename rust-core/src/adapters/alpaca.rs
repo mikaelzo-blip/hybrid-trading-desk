@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::Deserialize;
+use serde_json::value::RawValue;
 
 use crate::models::market::{AssetClass, Candle, Timeframe};
 
@@ -106,11 +108,40 @@ struct AlpacaBarsResponse {
 #[derive(Debug, Deserialize)]
 struct AlpacaBar {
     t: String,
-    o: String,
-    h: String,
-    l: String,
-    c: String,
-    v: String,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    o: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    h: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    l: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    c: Decimal,
+    #[serde(deserialize_with = "deserialize_decimal")]
+    v: Decimal,
+}
+
+fn deserialize_decimal<'de, D>(deserializer: D) -> std::result::Result<Decimal, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    // Read JSON number text before serde_json can round it through a float.
+    let raw = Box::<RawValue>::deserialize(deserializer)?;
+    let literal = raw.get();
+    let text: String;
+    let value = if literal.starts_with('"') {
+        text = serde_json::from_str(literal).map_err(D::Error::custom)?;
+        &text
+    } else {
+        literal
+    };
+    let decimal = if value.contains(['e', 'E']) {
+        Decimal::from_scientific(value)
+    } else {
+        Decimal::from_str_exact(value)
+    };
+    decimal.map_err(D::Error::custom)
 }
 
 impl AlpacaBar {
@@ -122,11 +153,11 @@ impl AlpacaBar {
             open_time: DateTime::parse_from_rfc3339(&self.t)
                 .context("invalid alpaca time")?
                 .with_timezone(&Utc),
-            open: self.o.parse().context("invalid open")?,
-            high: self.h.parse().context("invalid high")?,
-            low: self.l.parse().context("invalid low")?,
-            close: self.c.parse().context("invalid close")?,
-            volume: self.v.parse().context("invalid volume")?,
+            open: self.o,
+            high: self.h,
+            low: self.l,
+            close: self.c,
+            volume: self.v,
         })
     }
 }
@@ -143,9 +174,10 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/v2/stocks/NVDA/bars"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "bars": [{"t":"2026-01-01T00:00:00Z","o":"100","h":"110","l":"90","c":"105","v":"1000"}]
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                r#"{"bars":[{"t":"2026-01-01T00:00:00Z","o":100,"h":110.25,"l":"90","c":105.123456789012345678,"v":1000}]}"#,
+                "application/json",
+            ))
             .mount(&server)
             .await;
         let adapter = AlpacaAdapter::new(
@@ -160,7 +192,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(candles.len(), 1);
-        assert_eq!(candles[0].close, dec!(105));
+        assert_eq!(candles[0].open, dec!(100));
+        assert_eq!(candles[0].high, dec!(110.25));
+        assert_eq!(candles[0].low, dec!(90));
+        assert_eq!(candles[0].close, dec!(105.123456789012345678));
+        assert_eq!(candles[0].volume, dec!(1000));
         assert_eq!(candles[0].asset_class, AssetClass::UsStock);
     }
 }

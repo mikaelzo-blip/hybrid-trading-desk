@@ -29,21 +29,35 @@ impl ForexAdapter {
         timeframe: Timeframe,
         limit: usize,
     ) -> Result<Vec<Candle>> {
-        let symbol = ticker.trim().to_uppercase();
+        let symbol = ticker.trim().to_ascii_uppercase();
+        let upstream_symbol = if symbol.len() == 6 && symbol.bytes().all(|c| c.is_ascii_uppercase())
+        {
+            let (base, quote) = symbol.split_at(3);
+            format!("{base}/{quote}")
+        } else {
+            symbol.clone()
+        };
         let interval = map_timeframe(timeframe)?;
-        let mut url = format!(
-            "{}/time_series?symbol={}&interval={}&outputsize={}&format=JSON",
-            self.base_url,
-            symbol,
-            interval,
-            limit.clamp(1, 5000)
-        );
+        let outputsize = limit.clamp(1, 5000).to_string();
+        let mut request = self
+            .http
+            .get(format!("{}/time_series", self.base_url))
+            .query(&[
+                ("symbol", upstream_symbol.as_str()),
+                ("interval", interval),
+                ("outputsize", outputsize.as_str()),
+                ("format", "JSON"),
+            ]);
         if let Some(key) = &self.api_key {
-            url.push_str(&format!("&apikey={key}"));
+            request = request.query(&[("apikey", key)]);
         }
-        let resp = self.http.get(&url).send().await?;
+        let resp = request.send().await.map_err(reqwest::Error::without_url)?;
         let status = resp.status();
-        let body: TwelveResponse = resp.json().await.context("invalid twelve data response")?;
+        let body: TwelveResponse = resp
+            .json()
+            .await
+            .map_err(reqwest::Error::without_url)
+            .context("invalid twelve data response")?;
         if !status.is_success() || body.status.as_deref() == Some("error") {
             return Err(anyhow!("twelve data error: {:?}", body.message));
         }
@@ -124,7 +138,7 @@ impl TwelveValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -132,6 +146,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/time_series"))
+            .and(query_param("symbol", "EUR/USD"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "status":"ok",
                 "values":[{"datetime":"2026-01-01 00:00:00","open":"1.1","high":"1.2","low":"1.0","close":"1.15","volume":"123"}]
@@ -139,12 +154,15 @@ mod tests {
             .mount(&server)
             .await;
         let adapter = ForexAdapter::new(server.uri(), Some("k".into())).unwrap();
-        let candles = adapter
-            .fetch_candles("EUR/USD", Timeframe::H1, 10)
-            .await
-            .unwrap();
-        assert_eq!(candles.len(), 1);
-        assert_eq!(candles[0].asset_class, AssetClass::Forex);
+        for ticker in ["EUR/USD", "EURUSD"] {
+            let candles = adapter
+                .fetch_candles(ticker, Timeframe::H1, 10)
+                .await
+                .unwrap();
+            assert_eq!(candles.len(), 1);
+            assert_eq!(candles[0].asset_class, AssetClass::Forex);
+            assert_eq!(candles[0].ticker, ticker);
+        }
         assert_eq!(adapter.volume_reliability(), "low_tick_only");
     }
 }

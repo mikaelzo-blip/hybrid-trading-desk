@@ -82,13 +82,13 @@ export default function LiveCandleChart({ assetClass, ticker, timeframe, signal 
     };
 
     void load();
-    const onResize = () => chart?.resize();
-    window.addEventListener("resize", onResize);
+    const resizeObserver = new ResizeObserver(() => chart?.resize());
+    resizeObserver.observe(container);
 
     return () => {
       disposed = true;
       unsubscribe?.();
-      window.removeEventListener("resize", onResize);
+      resizeObserver.disconnect();
       dispose(container);
       chartRef.current = null;
       overlayIdsRef.current = [];
@@ -146,16 +146,15 @@ export default function LiveCandleChart({ assetClass, ticker, timeframe, signal 
   }, [signal, status]);
 
   return (
-    <div className="flex h-full min-h-[520px] flex-col rounded-lg border border-slate-800 bg-slate-900/40">
-      <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2 text-xs text-slate-400">
-        <span>
-          {assetClass.toUpperCase()} · {ticker} · {timeframe}
-        </span>
-        <span>
-          chart: {status} · ws: {wsStatus}
-        </span>
+    <section aria-label="Candlestick chart" className="min-w-0 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/40">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-800 px-4 py-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 [overflow-wrap:anywhere]">
+          <h2 className="font-mono text-base font-semibold text-slate-100">{ticker}</h2>
+          <span className="text-xs text-slate-400">{assetClass.toUpperCase()} · {timeframe}</span>
+        </div>
+        <span className="text-xs text-slate-400">Chart: {status} · Stream: {wsStatus}</span>
       </div>
-      <div ref={containerRef} className="min-h-[480px] flex-1" />
-    </div>
+      <div ref={containerRef} className="h-[clamp(340px,64vh,760px)] w-full" />
+    </section>
   );
 }

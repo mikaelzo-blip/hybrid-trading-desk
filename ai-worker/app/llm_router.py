@@ -36,6 +36,8 @@ class LLMRouter:
         }
         if provider.base_url:
             kwargs["base_url"] = provider.base_url
+        if self.settings.free_tier_mode:
+            kwargs["max_retries"] = 0
         return AsyncOpenAI(**kwargs)
 
     async def _pace(self) -> None:

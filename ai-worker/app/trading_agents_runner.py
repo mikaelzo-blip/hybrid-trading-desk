@@ -64,6 +64,42 @@ async def run_analysis(req: AnalyzeRequest, llm: LLMRouter | None = None) -> Asy
             "event_risk": req.event_risk if isinstance(req.event_risk, dict) else req.event_risk.model_dump(),
         }, ensure_ascii=False)
 
+        if settings.free_tier_mode:
+            if req.enable_vision:
+                yield _sse("vision", {
+                    "stage": "vision",
+                    "status": "skipped_free_tier",
+                    "reason": "Mode hemat kuota memakai konteks numerik saja.",
+                })
+            prompt = (
+                f"{asset_profile_prompt(req.asset_class)}\n"
+                f"CONTEXT JSON:\n{context_json}\n\n"
+                "In one pass, weigh the strongest bullish and bearish evidence, then give "
+                "one decision. Do not invent data or prices. If evidence is missing, return HOLD.\n"
+                "Return only one JSON object. Use BUY, HOLD, or SELL for action; confidence "
+                "must be between 0 and 1. Use plain numeric strings for entry_price, stop_loss, "
+                "and take_profit; use zero stop_loss and take_profit for HOLD. "
+                "Write a concise reasoning_summary in Bahasa Indonesia.\n"
+                f"Required JSON schema: {json.dumps(AgentSignalOutput.model_json_schema(), ensure_ascii=False)}"
+            )
+            response = await llm.complete(
+                [{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=1200,
+            )
+            if response.provider != primary:
+                yield _sse("provider_fallback", {"from": primary, "to": response.provider, "stage": "final"})
+            # Spend no extra request on malformed output in the quota-saving path.
+            signal = await repair_or_hold(response.text)
+            yield _sse("final", {
+                "signal": signal.model_dump(),
+                "provider": response.provider,
+                "model": response.model,
+                "analyst_notes": [],
+                "debate": {"bull": "", "bear": ""},
+            })
+            return
+
         analyst_notes: list[dict[str, str]] = []
         seen_provider_fallback = False
 
@@ -162,15 +198,27 @@ EXACT JSON SCHEMA:
         final_resp = await llm.complete(
             [{"role": "system", "content": SYSTEM_GUARDRAILS}, {"role": "user", "content": final_prompt}],
             temperature=0.0,
-            max_tokens=600,
+            max_tokens=1200,
         )
         if final_resp.provider != primary and not seen_provider_fallback:
             seen_provider_fallback = True
             yield _sse("provider_fallback", {"from": primary, "to": final_resp.provider, "stage": "final"})
 
         async def repair_call(prompt: str, _malformed: str) -> str:
-            r = await llm.quick_complete(prompt)
-            return r.text
+            nonlocal final_resp
+            final_resp = await llm.complete(
+                [
+                    {"role": "system", "content": SYSTEM_GUARDRAILS},
+                    {"role": "user", "content": final_prompt},
+                    {"role": "user", "content": (
+                        f"{prompt}\nUse only the market context above. "
+                        "Do not invent prices or trade setups; return HOLD if the evidence is insufficient."
+                    )},
+                ],
+                temperature=0.0,
+                max_tokens=1200,
+            )
+            return final_resp.text
 
         signal = await repair_or_hold(final_resp.text, repair_call=repair_call)
 
